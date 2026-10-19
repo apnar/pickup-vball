@@ -1,21 +1,21 @@
 import type { Rendered } from "../brevo";
-import { baseFacts, type RsvpFacts, render } from "./rsvp";
+import { baseFacts, peopleAre, type RsvpFacts, render } from "./rsvp";
 
 export type RsvpNudgeInput = RsvpFacts & { needed: number };
 
-/** Stage 02. Game day, still short, and you have said nothing. */
+/** Stage 02. The day of, still short, and this reader has not answered. */
 export function rsvpNudgeEmail(input: RsvpNudgeInput): Rendered {
 	const needed = `${input.needed} more`;
 	return render({
-		subject: `${input.inCount} in, ${input.needed} short. You have not said anything.`,
-		title: "You have not answered.",
+		subject: `Tonight: ${input.inCount} in, ${needed} needed. Are you coming?`,
+		title: "Are you coming tonight?",
 		kicker: "Tonight",
-		heading: "You have not answered.",
-		lead: `${input.inCount} guys committed to tonight. You are not one of them. ${needed} and it is a run; otherwise it is Sean, a ball, and a permit he already paid for.`,
-		facts: [...baseFacts(input), { label: "Need", value: needed }],
+		heading: "Are you coming tonight?",
+		lead: `${peopleAre(input.inCount)} in for tonight so far. ${needed} would confirm the night. Please let us know either way.`,
+		facts: [...baseFacts(input), { label: "Needed", value: needed }],
 		notes: input.notes,
 		answers: ["in", "maybe", "out"],
-		tail: "This one only went to the guys who have not answered. It is a short list and you are on it.",
+		tail: "This reminder only went to people who have not answered yet.",
 		facts_: input,
 	});
 }

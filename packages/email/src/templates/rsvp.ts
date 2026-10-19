@@ -1,7 +1,7 @@
 /**
  * The five emails of the RSVP cycle. They share a shape -- the same facts
- * about the same game, differing in what they are nagging you about -- so
- * they share a type and a few builders rather than repeating eleven fields
+ * about the same night, differing only in what they ask of the reader -- so
+ * they share a type and a few builders rather than repeating twelve fields
  * five times.
  */
 
@@ -16,6 +16,7 @@ import {
 	listFooter,
 	listFooterText,
 	muted,
+	para,
 } from "../render";
 
 export type RsvpFacts = {
@@ -31,12 +32,17 @@ export type RsvpFacts = {
 	confirmAt: number;
 	playAt: number;
 	capacity: number;
+	/**
+	 * When the verdict lands, "5:30 PM". Passed in from the cycle's own clock
+	 * rather than written into the copy, so the emails cannot name a deadline
+	 * the job is not keeping.
+	 */
+	decideAt: string;
 };
 
-const P = "margin:0 0 14px; font-size:16px; line-height:1.5;";
-
-export function para(text: string): string {
-	return `<p style="${P}">${escapeHtml(text)}</p>`;
+/** "1 person is" / "9 people are", for leads that start with the count. */
+export function peopleAre(n: number): string {
+	return n === 1 ? "1 person is" : `${n} people are`;
 }
 
 const LABEL: Record<RsvpAnswer, string> = {
@@ -45,7 +51,7 @@ const LABEL: Record<RsvpAnswer, string> = {
 	out: "I'm out",
 };
 
-/** The answer buttons, in the order they should be tapped least regrettably. */
+/** The answer buttons, yes first: it is the one the night is waiting on. */
 export function answerButtons(
 	facts: RsvpFacts,
 	answers: readonly RsvpAnswer[],
@@ -65,7 +71,7 @@ export function answerLines(
 }
 
 export function nameList(names: string[]): string {
-	return names.length > 0 ? names.join(", ") : "Nobody. Yet.";
+	return names.length > 0 ? names.join(", ") : "Nobody yet";
 }
 
 /** When / Where, and who is in. Every cycle email leads with these. */
@@ -73,7 +79,7 @@ export function baseFacts(facts: RsvpFacts): Fact[] {
 	return [
 		{ label: "When", value: `${facts.dateLabel}, ${facts.timeLabel}` },
 		{ label: "Where", value: facts.location },
-		{ label: "In", value: nameList(facts.inNames) },
+		{ label: "Who's in", value: nameList(facts.inNames) },
 	];
 }
 

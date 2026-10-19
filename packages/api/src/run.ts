@@ -1,13 +1,12 @@
 /**
- * Facts about the run that the API needs. Copy lives in apps/web/src/content.
+ * Facts about the nights that the API needs. Copy lives in apps/web/src/content.
  */
 
 /**
- * How many names the sheet takes. Twelve is the good number -- five a side
- * and the two subs there always are -- and fifteen is the number we will
- * actually put up with before somebody sits out a whole game.
+ * How many names the sheet takes. Eighteen is three sides of six: two on the
+ * court and one waiting to rotate in.
  */
-export const CAPACITY = 15;
+export const CAPACITY = 18;
 
 /** The gym's timezone. Game dates are calendar days here. */
 export const RUN_TIMEZONE = "America/New_York";
@@ -115,6 +114,20 @@ export function formatGameTime(time: string): string {
 	const suffix = h >= 12 ? "PM" : "AM";
 	const hour12 = h % 12 === 0 ? 12 : h % 12;
 	return `${hour12}:${String(m).padStart(2, "0")} ${suffix}`;
+}
+
+/**
+ * "7:30 – 10:00 PM": the shared AM/PM is said once, the way the nights are
+ * written everywhere else. Both are kept when a range crosses noon.
+ */
+export function formatTimeRange(start: string, end: string | null): string {
+	const from = formatGameTime(start);
+	if (!end) return from;
+	const to = formatGameTime(end);
+	const [fromClock, fromHalf] = from.split(" ");
+	return fromHalf && to.endsWith(` ${fromHalf}`)
+		? `${fromClock} – ${to}`
+		: `${from} – ${to}`;
 }
 
 /** Normalises a typed name for the uniqueness key. */

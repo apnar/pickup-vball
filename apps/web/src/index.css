@@ -1,7 +1,9 @@
-/* Self-hosted Barlow / Barlow Condensed (served as static assets). */
+/* Self-hosted Barlow / Barlow Condensed (served as static assets). Condensed
+   700-800 for display type and buttons, Barlow 400-600 for everything else. */
 @import "@fontsource/barlow/400.css";
 @import "@fontsource/barlow/500.css";
-@import "@fontsource/barlow/700.css";
-@import "@fontsource/barlow-condensed/400.css";
+@import "@fontsource/barlow/600.css";
 @import "@fontsource/barlow-condensed/600.css";
+@import "@fontsource/barlow-condensed/700.css";
+@import "@fontsource/barlow-condensed/800.css";
 @import "@pickup-vball/ui/globals.css";

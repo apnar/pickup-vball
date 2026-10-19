@@ -1,147 +1,113 @@
-import { Blueprint } from "@pickup-vball/ui/components/blueprint";
 import { buttonVariants } from "@pickup-vball/ui/components/button";
 import { Link } from "@tanstack/react-router";
 
 import PageTitle from "@/components/page-title";
 import SectionKicker from "@/components/section-kicker";
-import { conditions } from "@/content/run";
+import { conditions, SITE_AREA } from "@/content/run";
 
 /**
- * What a stranger sees. The pitch and the rules, but not the court, not the
- * tip-off time, not who is coming. Those are for people on the list.
+ * What a stranger sees. What the group is and how to join, but not the gym,
+ * not the start time, not who is coming. Those are for people in the group.
  */
 
-/** Court and tip-off stay off this page, so those two rows get rewritten. */
+/**
+ * The standing facts, minus the two that would tell a stranger where and
+ * when to turn up: the time and the named gyms become one vague "Where".
+ */
 const publicConditions = [
-	conditions.find((c) => c.prop === "Day"),
+	conditions.find((c) => c.prop === "Nights"),
 	{
-		num: "02",
 		prop: "Where",
-		val: "Montgomery County",
-		rem: "A middle school gym. Players know which one.",
+		val: SITE_AREA,
+		rem: "School gyms around the county. Players see the address for each night.",
 	},
 	conditions.find((c) => c.prop === "Format"),
-	conditions.find((c) => c.prop === "Ball"),
+	conditions.find((c) => c.prop === "Cost"),
 ]
-	.filter(Boolean)
-	.map((c, i) => ({
-		...(c as { num: string; prop: string; val: string; rem: string }),
-		// The full sheet numbers tip-off 02 and court 03. Both are hidden from
-		// strangers, so renumber what is left instead of leaving a gap.
-		num: String(i + 1).padStart(2, "0"),
-	}));
+	.filter((c) => c !== undefined)
+	.map((c) =>
+		// The cost line names the payment handle. That is for players.
+		c.prop === "Cost" ? { ...c, rem: "Paid for each night you play." } : c,
+	);
 
-const howToGetIn = [
+const howToJoin = [
 	{
-		num: "01",
-		title: "It is invite only",
-		body: "One gym, one permit, and a sheet that fills up. Nobody signs themselves up.",
+		title: "It’s invite only",
+		body: "New players are added by Viroj. There is no sign-up form.",
 	},
 	{
-		num: "02",
-		title: "Know somebody who plays",
-		body: "Ask them to mention you to Sean. That is the whole application process.",
+		title: "Know someone who plays?",
+		body: "Ask them to introduce you to Viroj.",
 	},
 	{
-		num: "03",
-		title: "Or just ask Sean",
-		body: "He has the ball, the permit and the only vote that counts. Worst case he says the run is full, which it is.",
-	},
-	{
-		num: "04",
-		title: "Already in?",
-		body: "Every link in your email signs you in. Check your inbox, or use a password.",
+		title: "Already in the group?",
+		body: "Every email from us has a link that signs you in. You can also sign in with your email address.",
 	},
 ];
 
 export default function MarketingHome() {
 	return (
 		<>
-			<section className="pt-18 pb-12">
+			<section className="pt-8 pb-10 md:pt-10">
 				<PageTitle
 					size="hero"
-					line1="Monday nights."
-					line2="Show up or get talked about."
+					title="Pickup volleyball, most weeknights."
+					sub={`An invite-only indoor volleyball group in ${SITE_AREA}. Players sign in to see the schedule and RSVP for each night.`}
 				/>
-				<p className="mt-7 max-w-[60ch] text-base leading-6">
-					A weekly full-court run in Montgomery County for guys who peaked in
-					high school and refuse to admit it. Five-on-five if enough of them
-					actually show. Call your own fouls. And no, that was not a travel.
-				</p>
 				<div className="mt-6 flex flex-wrap gap-2.5">
 					<Link
-						to="/rules"
+						to="/login"
 						className={buttonVariants({ className: "no-underline" })}
 					>
-						Read the rules
+						Sign in
 					</Link>
 					<Link
-						to="/login"
+						to="/rules"
 						className={buttonVariants({
-							variant: "ghost",
+							variant: "outline",
 							className: "no-underline",
 						})}
 					>
-						Sign in
+						House rules
 					</Link>
 				</div>
 			</section>
 
-			<section className="pt-6 pb-12">
-				<Blueprint>
-					<header className="kicker flex flex-wrap border-divider border-b leading-6">
-						<span className="min-w-[16ch] flex-1 px-6 py-3">
-							Standing game conditions
-						</span>
-						<span className="whitespace-nowrap border-divider border-l px-6 py-3 text-neutral-700">
-							Every Monday
-						</span>
-						<span className="whitespace-nowrap border-divider border-l px-6 py-3 text-neutral-700">
-							Sheet 01
-						</span>
-					</header>
+			<section className="pb-10" aria-labelledby="about-h">
+				<SectionKicker id="about-h">About the nights</SectionKicker>
+				<dl className="m-0 grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-4">
 					{publicConditions.map((c) => (
-						<div
-							key={c.num}
-							className="grid grid-cols-1 items-baseline gap-x-6 border-ink/8 border-b px-6 py-3 md:grid-cols-[72px_1fr_1fr_1.4fr]"
-						>
-							<span className="kicker tnum text-steel-700">{c.num}</span>
-							<span className="text-[15px] leading-6">{c.prop}</span>
-							<span className="font-heading font-semibold text-[22px] leading-6 tracking-[0.02em]">
-								{c.val}
-							</span>
-							<span className="hidden text-[15px] text-neutral-700 leading-6 md:block">
-								{c.rem}
-							</span>
+						<div key={c.prop} className="panel flex flex-col gap-1.5">
+							<dt className="kicker">{c.prop}</dt>
+							<dd className="m-0 flex flex-col gap-1.5">
+								<span className="display text-[28px] leading-none">
+									{c.val}
+								</span>
+								<span className="text-[14px] text-subtle">{c.rem}</span>
+							</dd>
 						</div>
 					))}
-					<p className="m-0 px-6 py-3 text-[13px] text-neutral-700 leading-6">
-						Tip-off time and the address go to people on the list. Not to you.
-						Yet.
-					</p>
-				</Blueprint>
+				</dl>
 			</section>
 
-			<section className="py-12 pb-15">
-				<SectionKicker className="mb-6">02 · How to get in</SectionKicker>
-				<Blueprint className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-					{howToGetIn.map((step) => (
-						<div
-							key={step.num}
-							// Two up on tablets, four across on desktop: the dividers
-							// follow, so the last cell in a row never grows one.
-							className="border-ink/8 border-b p-6 md:border-b-0 lg:not-last:border-r md:[&:nth-child(-n+2)]:border-b lg:[&:nth-child(-n+2)]:border-b-0 md:[&:nth-child(odd)]:border-r"
-						>
-							<span className="kicker tnum text-steel-700">{step.num}</span>
-							<h2 className="mt-2 font-heading text-[22px] uppercase leading-7 tracking-[0.02em]">
-								{step.title}
-							</h2>
-							<p className="mt-2 text-[15px] text-neutral-700 leading-6">
-								{step.body}
-							</p>
-						</div>
+			<section className="pb-12" aria-labelledby="join-h">
+				<SectionKicker id="join-h">How to join</SectionKicker>
+				<ol className="panel-outline m-0 flex list-none flex-col gap-4">
+					{howToJoin.map((step, i) => (
+						<li key={step.title} className="flex gap-3">
+							<span
+								aria-hidden="true"
+								className="inline-flex size-[26px] shrink-0 items-center justify-center rounded-full bg-raised font-bold text-[13px]"
+							>
+								{i + 1}
+							</span>
+							<span className="flex flex-col gap-0.5">
+								<span className="font-semibold">{step.title}</span>
+								<span className="text-ink-soft">{step.body}</span>
+							</span>
+						</li>
 					))}
-				</Blueprint>
+				</ol>
 			</section>
 		</>
 	);

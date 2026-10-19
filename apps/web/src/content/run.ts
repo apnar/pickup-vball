@@ -2,87 +2,80 @@
  * Copy and standing data for the site. Edit here; the pages read from it.
  */
 
-export const SITE_NAME = "Sean's Monday Night Run";
+export const SITE_NAME = "Viroj’s Pickup";
 
-/** Prefilled tip-off time (24-hour) when an admin books a game. */
-export const DEFAULT_START_TIME = "21:00";
+/** Where the group plays, for the footer and the signed-out home page. */
+export const SITE_AREA = "Montgomery County, MD";
 
-/** Prefilled end time (24-hour) when an admin books a game. */
-export const DEFAULT_END_TIME = "22:30";
+/** Prefilled start time (24-hour) when an admin books a night. */
+export const DEFAULT_START_TIME = "19:30";
 
+/** Prefilled end time (24-hour) when an admin books a night. */
+export const DEFAULT_END_TIME = "22:00";
+
+/** How a player pays. Shown on the home page and the account page. */
+export const PAYMENT = {
+	handle: "@Viroj7",
+	perNight: 5,
+	line: "Venmo Viroj at @Viroj7, or pay cash at the gym. $5 a night.",
+} as const;
+
+/** The standing facts about a night, shown to players on the home page. */
 export const conditions = [
 	{
-		num: "01",
-		prop: "Day",
-		val: "Monday",
-		rem: "Every one of them. Holidays are not an excuse.",
+		prop: "Nights",
+		val: "Most weeknights",
+		rem: "A night is on the schedule once the gym is booked.",
 	},
 	{
-		num: "02",
-		prop: "Tip-off",
-		val: "9:00 - 10:30 PM",
-		rem: '"Sharp." Layup lines start at 9:15 when Dev arrives.',
+		prop: "Time",
+		val: "7:30 – 10:00 PM",
+		rem: "Each night lists its own start time.",
 	},
 	{
-		num: "03",
-		prop: "Court",
-		val: "Redland or Shady Grove Middle Schools",
-		rem: "Whichever one the permit says. The sheet for the week names it.",
+		prop: "Gyms",
+		val: "Magruder · Wheaton · College Gardens",
+		rem: "Montgomery County school gyms. The address is on every night.",
 	},
 	{
-		num: "04",
 		prop: "Format",
-		val: "5v5 · to 15",
-		rem: "Twos and threes, win by two, winners stay.",
+		val: "6 v 6",
+		rem: "4 v 4 when numbers are short.",
 	},
 	{
-		num: "05",
-		prop: "Ball",
-		val: "Sean's",
-		rem: "Do not kick it. Do not sit on it. Do not lose it.",
+		prop: "Cost",
+		val: `$${PAYMENT.perNight} a night`,
+		rem: "Venmo Viroj at @Viroj7, or cash at the gym.",
 	},
 ] as const;
 
 /**
- * The house rules, in the order they matter. Numbered where they are
- * rendered, not here -- the first two were added years after the rest, and
- * hand-typed numbers would have meant retyping all of them to do it.
+ * House rules, in the order they matter. Numbered where they are rendered,
+ * not here, so a rule can be added anywhere without renumbering the rest.
  */
 export const rules = [
 	{
-		title: "Nobody gets hurt",
-		body: "Everybody here works Tuesday. No charges taken, no undercutting a jumper, no closing out like somebody is scouting. The run only happens again if the same guys can walk in next week.",
+		title: "Play safe",
+		body: "Stay on your side of the net and call out any ball that rolls onto a court. Stop the rally when someone could get hurt and replay the point.",
 	},
 	{
-		title: "Don't be a dick",
-		body: "Covers the arguing, the scorekeeping nobody asked for, and the guy who calls a foul on every miss. It also covers whatever you were about to do that is not on this list.",
+		title: "Call your own violations",
+		body: "Nets, lifts, doubles and lines are on the honor system. If a call is close and the teams disagree, replay the point.",
 	},
 	{
-		title: "Call your own fouls",
-		body: "Then live with the shame. The offense calls it, the defense complains about it, the game moves on.",
+		title: "Rally scoring to 25",
+		body: "Win by two. When a night is running long the last game can go to 15.",
 	},
 	{
-		title: "Winners stay",
-		body: "Losers shoot for next. Free throws only. Airballs forfeit your spot to whoever laughed loudest.",
+		title: "Everyone rotates in",
+		body: "Players waiting on the side come in after each game, so everybody gets about the same time on the court.",
 	},
 	{
-		title: "Twos and threes, to 15",
-		body: "Win by two. The last game of the night is the exception: it ends when the gym does, not when somebody gets to 15.",
+		title: "Reverse coed nights",
+		body: "The net goes to women’s height (7′ 4⅛″), and men can’t attack or block in front of the 3 m line.",
 	},
 	{
-		title: "Sean's ball, Sean's rules",
-		body: "Sean's hip also gets a vote. When the hip goes, the run goes. Do not test the hip.",
-	},
-	{
-		title: "No heat checks before 9:30",
-		body: "Nobody has earned a 30-footer at 9:10. Nobody has earned one at 10:15 either, but rules are rules.",
-	},
-	{
-		title: "Four on four, nothing over half",
-		body: "Short-handed nights, the ball gets dribbled across half court. No long outlet to the guy who quit on defense and left early.",
-	},
-	{
-		title: "The colored bars are in",
-		body: "Those fat painted stripes down the sidelines play as in bounds. The baseline is still the baseline, so do not get inventive back there.",
+		title: "Leave the gym as we found it",
+		body: "We are guests of the school. Help put up the nets at the start and take them down at the end, and take your trash with you.",
 	},
 ] as const;

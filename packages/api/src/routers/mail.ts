@@ -28,8 +28,8 @@ const stageSchema = z.enum(
 );
 
 const messageSchema = z.object({
-	subject: z.string().trim().min(1, "Subject?").max(120),
-	body: z.string().trim().min(1, "Say something.").max(5000),
+	subject: z.string().trim().min(1, "Enter a subject.").max(120),
+	body: z.string().trim().min(1, "Enter a message.").max(5000),
 	/**
 	 * Who hears it. "active" is everybody on the list; "everyone" also reaches
 	 * the people who have stepped away, for the rare thing they would want
@@ -42,13 +42,17 @@ const messageSchema = z.object({
 async function requireGame(db: Context["db"], id: string) {
 	const found = await findGame(db, id);
 	if (!found) {
-		throw new ORPCError("NOT_FOUND", { message: "No such game." });
+		throw new ORPCError("NOT_FOUND", {
+			message: "That night no longer exists.",
+		});
 	}
 	return found;
 }
 
 function nobody(): never {
-	throw new ORPCError("BAD_REQUEST", { message: "Nobody is on the list." });
+	throw new ORPCError("BAD_REQUEST", {
+		message: "There is nobody in the group to send to.",
+	});
 }
 
 export const mailRouter = {
@@ -182,7 +186,7 @@ export const mailRouter = {
 	}),
 
 	/**
-	 * Overrule the verdict. The 7:30 count is the rule and this is the
+	 * Overrule the verdict. The 5:30 count is the rule and this is the
 	 * exception -- seven in and four maybes is a night a human might still
 	 * want to play.
 	 */
@@ -269,7 +273,7 @@ export const mailRouter = {
 				);
 				if (!outcome.ok) {
 					throw new ORPCError("INTERNAL_SERVER_ERROR", {
-						message: `Brevo said no: ${outcome.error}`,
+						message: `The email could not be sent: ${outcome.error}`,
 					});
 				}
 				return {

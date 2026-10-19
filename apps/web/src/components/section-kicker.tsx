@@ -1,17 +1,19 @@
-/** Numbered section label with the hairline rule beneath it. */
+/** A section heading: condensed, uppercase, the size the mockups give "Who's in". */
 export default function SectionKicker({
 	children,
-	className = "mb-8",
+	className = "mb-4",
+	id,
 }: {
 	children: React.ReactNode;
 	className?: string;
+	id?: string;
 }) {
 	return (
-		<>
-			<span className="kicker mb-3 block text-steel-700 leading-3">
-				{children}
-			</span>
-			<hr className={`h-px border-0 bg-divider ${className}`} />
-		</>
+		<h2
+			id={id}
+			className={`m-0 font-bold font-heading text-[22px] uppercase leading-tight tracking-[0.04em] md:text-[24px] ${className}`}
+		>
+			{children}
+		</h2>
 	);
 }

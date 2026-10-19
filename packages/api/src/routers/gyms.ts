@@ -9,11 +9,11 @@ import { isUniqueViolation } from "../db-errors";
 import { adminProcedure } from "../index";
 
 const gymInput = z.object({
-	name: z.string().trim().min(1, "What is it called?").max(80),
+	name: z.string().trim().min(1, "Enter the gym's name.").max(80),
 	address: z
 		.string()
 		.trim()
-		.min(1, "The whole address. People are driving there.")
+		.min(1, "Enter the full address. Players use it to get there.")
 		.max(200),
 	notes: z.string().trim().max(500).nullable().optional(),
 });
@@ -106,7 +106,9 @@ export const gymsRouter = {
 					.where(eq(gym.id, id))
 					.run();
 				if (result.meta.changes === 0) {
-					throw new ORPCError("NOT_FOUND", { message: "No such gym." });
+					throw new ORPCError("NOT_FOUND", {
+						message: "That gym no longer exists.",
+					});
 				}
 			} catch (error) {
 				if (isUniqueViolation(error)) {
@@ -121,7 +123,7 @@ export const gymsRouter = {
 
 	/**
 	 * Only while nothing is booked there. The FK says `restrict`, but D1 would
-	 * answer that with a constraint error, and "you have three games there"
+	 * answer that with a constraint error, and "three nights are booked there"
 	 * is the sentence an admin can actually act on. Permit coverage is not in
 	 * the way: those rows are paperwork and go with it.
 	 */
@@ -137,8 +139,8 @@ export const gymsRouter = {
 				throw new ORPCError("CONFLICT", {
 					message:
 						booked.count === 1
-							? "A game is booked there. Delete or move it first."
-							: `${booked.count} games are booked there. Delete or move them first.`,
+							? "A night is booked at this gym. Delete or move it first."
+							: `${booked.count} nights are booked at this gym. Delete or move them first.`,
 				});
 			}
 			await context.db.delete(gym).where(eq(gym.id, input.id));

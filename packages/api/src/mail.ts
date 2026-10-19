@@ -23,9 +23,9 @@ import { asc, eq } from "drizzle-orm";
 
 import { type Split, splitAudience } from "./audience";
 import type { Context } from "./context";
-import { CONFIRM_AT, PLAY_AT } from "./cycle";
+import { CONFIRM_AT, PLAY_AT, STAGE } from "./cycle";
 import type { GameSummary } from "./games";
-import { CAPACITY } from "./run";
+import { CAPACITY, formatGameTime } from "./run";
 
 type Db = Context["db"];
 
@@ -50,7 +50,7 @@ export function permitUrl(game: GameSummary): string | null {
 	return game.permit ? `${siteUrl()}/api/permits/${game.permit.id}/file` : null;
 }
 
-/** Every fact the five cycle emails share about one game. */
+/** Every fact the five cycle emails share about one night. */
 export function rsvpFacts(game: GameSummary, split: Split): RsvpFacts {
 	return {
 		gameId: game.id,
@@ -65,6 +65,7 @@ export function rsvpFacts(game: GameSummary, split: Split): RsvpFacts {
 		confirmAt: CONFIRM_AT,
 		playAt: PLAY_AT,
 		capacity: CAPACITY,
+		decideAt: formatGameTime(STAGE.final.at ?? "17:30"),
 	};
 }
 
@@ -127,7 +128,7 @@ export async function recipientCounts(
  * outcome in `email_send`. Returns null when nobody would receive it.
  *
  * `audience` defaults to "active", which is what game email always wants:
- * somebody nursing a calf does not need to hear that a gym is booked. Only
+ * somebody on a break does not need to hear that a gym is booked. Only
  * the ad-hoc message ever passes "everyone", and nothing reaches anybody
  * deactivated -- `listRecipients` will not return them at all.
  */

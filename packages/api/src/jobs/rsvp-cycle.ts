@@ -3,7 +3,7 @@
  * what `../cycle.ts` says, which is also exactly what /admin/cycle tells
  * everybody it does.
  *
- * The half hour matters: the verdict falls at 7:30. Nothing else about the
+ * The half hour matters: the verdict falls at 5:30. Nothing else about the
  * schedule lives in wrangler.jsonc -- the job re-derives every instant from
  * `now` against the gym's clock, so the cron only has to be frequent enough,
  * never correct, and daylight saving never touches it.
@@ -92,12 +92,12 @@ async function skipStage(db: Db, gameId: string, stage: StageKey, now: Date) {
 }
 
 /**
- * The tenth yes turns the lights on, whatever time it lands.
+ * The yes that reaches CONFIRM_AT confirms the night, whatever time it lands.
  *
  * Called from the cron (which makes it correct on its own, and self-healing
  * within half an hour) and from every RSVP mutation (which only makes it
  * quick). The conditional claim is what lets both exist without a chance of
- * two "game on" emails.
+ * two "it's on" emails.
  */
 export async function confirmIfReady(
 	db: Db,
@@ -117,9 +117,9 @@ export async function confirmIfReady(
 	if (!row) return null;
 	if (row.confirmedAt !== null) return null;
 	if (row.status === "canceled") return null;
-	// Never announce a run the list has not been told about. A game booked
-	// three weeks out that ten regulars sign up for on the site should not
-	// fire "the run is on" before the invitation.
+	// Never announce a night the list has not been told about. A night booked
+	// three weeks out that enough regulars sign up for on the site should not
+	// fire "the night is on" before the invitation.
 	if (row.callAt === null) return null;
 
 	const summary = await findGame(db, gameId);
@@ -219,7 +219,7 @@ async function runStage(
 				sent: 0,
 				failed: 0,
 				quiet: silent
-					? "Past tip-off; recorded only."
+					? "Past the start; recorded only."
 					: "Already on and still on.",
 			};
 		}
@@ -251,7 +251,7 @@ async function runStage(
 		const alreadyOn = !short;
 		if (
 			!(await claim(db, summary.id, "call", now, {
-				// Ten before we even asked: this one email does both jobs.
+				// Enough before we even asked: this one email does both jobs.
 				...(alreadyOn && { status: "confirmed" as const }),
 				sending: true,
 			}))
@@ -265,7 +265,7 @@ async function runStage(
 				.where(and(eq(game.id, summary.id), isNull(game.confirmedAt)));
 		}
 		// Write down who is being asked, before the asking. This snapshot is
-		// the only record that survives of who was on the roster tonight and
+		// the only record that survives of who was on the roster that night and
 		// who was away -- `user` keeps one status and no history -- and the
 		// response rates on /admin/users are counted against it.
 		await recordInvites(db, summary.id, now);
@@ -387,7 +387,7 @@ export async function runRsvpCycle(
 				if (outcome) acted.push(outcome);
 			}
 		}
-		// The tenth yes may have landed between passes without anybody
+		// The confirming yes may have landed between passes without anybody
 		// touching the site since. This is the backstop for that.
 		const confirmed = await confirmIfReady(db, row.id, now);
 		if (confirmed) acted.push(confirmed);

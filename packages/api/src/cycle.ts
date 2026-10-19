@@ -1,5 +1,5 @@
 /**
- * The RSVP cycle: what the run asks the list, when, and what it does with the
+ * The RSVP cycle: what a night asks the group, when, and what it does with the
  * answers. This is the only place those facts exist. The job runs off it, the
  * admin write-up page renders it, and the numbers below are interpolated into
  * both -- so the page cannot describe a schedule the code is not keeping.
@@ -12,16 +12,20 @@ import type { EmailKind } from "@pickup-vball/db/schema/email";
 
 import { CAPACITY } from "./run";
 
-/** Ten answers make it a run, and the tenth turns the lights on early. */
-export const CONFIRM_AT = 10;
+/**
+ * Twelve in confirms a night: two full sides of six. The twelfth yes sends
+ * "it's on" early and stops the reminders.
+ */
+export const CONFIRM_AT = 12;
 
-/** Eight makes it a bad run that still counts. Seven is a shooting session. */
+/** Eight is enough for 4 v 4. Fewer than that and the night is called off. */
 export const PLAY_AT = 8;
 
 /**
- * No two cycle emails about the same game land closer than this. A game
- * booked at four on a Monday would otherwise fire four stages in one minute,
- * one of which accuses the reader of ignoring a message they never got.
+ * No two cycle emails about the same night land closer than this. A night
+ * booked late in the afternoon would otherwise fire several stages in one
+ * pass, one of which tells the reader they have not answered a message they
+ * never got.
  */
 export const STAGE_COOLDOWN_MINUTES = 90;
 
@@ -53,6 +57,12 @@ export type Stage = {
 	aside: string;
 };
 
+/*
+ * The clock is set for a 7:30 PM start: the verdict lands two hours before,
+ * which is also when the RSVP closes. A night that starts earlier still gets
+ * every stage that falls before its start; past the start, the verdict is
+ * recorded and nobody is emailed (see R0 in jobs/plan.ts).
+ */
 export const STAGES: readonly Stage[] = [
 	{
 		key: "call",
@@ -62,11 +72,10 @@ export const STAGES: readonly Stage[] = [
 		dayOffset: -1,
 		at: "17:00",
 		when: "5:00 PM, the day before",
-		who: "Everybody on the list",
-		title: "The ask",
-		says: "There is a run tomorrow, here is the gym, and here are three buttons: in, out, maybe.",
-		aside:
-			"Three buttons, because two was never enough hedging for this group.",
+		who: "Everyone active in the group",
+		title: "The call",
+		says: "There is a night tomorrow, here is the gym, and here are three buttons: in, maybe, out.",
+		aside: "Maybe keeps someone on the reminders without holding a spot.",
 	},
 	{
 		key: "nudge",
@@ -74,12 +83,13 @@ export const STAGES: readonly Stage[] = [
 		column: "nudgeAt",
 		kind: "rsvp_nudge",
 		dayOffset: 0,
-		at: "14:00",
-		when: "2:00 PM on game day",
+		at: "12:00",
+		when: "Noon on the day",
 		who: "Only the people who have not answered",
-		title: "The prod",
-		says: `Sent only if fewer than ${CONFIRM_AT} are in. Carries the names of everyone who already said yes. Anybody who has answered is left alone.`,
-		aside: "Silence is not an answer. It is a slower one.",
+		title: "Reminder",
+		says: `Sent only if fewer than ${CONFIRM_AT} are in. Lists everyone who has already said yes. Anyone who has answered is left alone.`,
+		aside:
+			"One reminder, to the people who have not replied, and only when it is needed.",
 	},
 	{
 		key: "confirmed",
@@ -88,11 +98,11 @@ export const STAGES: readonly Stage[] = [
 		kind: "rsvp_confirmed",
 		dayOffset: 0,
 		at: null,
-		when: `the moment the ${CONFIRM_AT}th yes lands`,
+		when: `the moment the ${CONFIRM_AT}th yes comes in`,
 		who: "Everyone who said in or maybe",
-		title: "Game on",
-		says: `The ${CONFIRM_AT}th yes turns the lights on, whatever time it arrives. Fires once and never un-fires.`,
-		aside: `${CONFIRM_AT} is enough for fives with two guys arguing on the sideline, which is the format.`,
+		title: "It's on",
+		says: `The ${CONFIRM_AT}th yes confirms the night, whatever time it arrives. Sent once and never taken back by the job.`,
+		aside: `${CONFIRM_AT} is two full sides of six.`,
 	},
 	{
 		key: "lastCall",
@@ -100,12 +110,13 @@ export const STAGES: readonly Stage[] = [
 		column: "lastCallAt",
 		kind: "rsvp_last_call",
 		dayOffset: 0,
-		at: "18:00",
-		when: "6:00 PM on game day",
-		who: "The maybes, and the ones who still have not answered",
+		at: "15:30",
+		when: "3:30 PM on the day",
+		who: "The maybes, and anyone who still has not answered",
 		title: "Last call",
-		says: `Sent only if we are still short of ${CONFIRM_AT}. This is the email that exists to turn a maybe into a number.`,
-		aside: "The maybes get one more chance to become a person with an opinion.",
+		says: `Sent only if the night is still short of ${CONFIRM_AT}. The last chance for a maybe to become a yes.`,
+		aside:
+			"Two hours before the verdict, so there is still time to change plans.",
 	},
 	{
 		key: "final",
@@ -113,12 +124,13 @@ export const STAGES: readonly Stage[] = [
 		column: "decidedAt",
 		kind: "rsvp_final",
 		dayOffset: 0,
-		at: "19:30",
-		when: "7:30 PM on game day",
-		who: "Everyone who answered. If it is off, everybody else too.",
+		at: "17:30",
+		when: "5:30 PM on the day",
+		who: "Everyone who answered. If it is off, everyone else too.",
 		title: "The verdict",
-		says: `${PLAY_AT} or more in and the run is on. Fewer and it is off. If it was already on and still is, nothing is sent -- the answer has not changed.`,
-		aside: "Ninety minutes before tip-off is enough time to find a couch.",
+		says: `${PLAY_AT} or more in and the night is on. Fewer and it is off. If it was already on and still is, nothing is sent: the answer has not changed.`,
+		aside:
+			"Two hours before a 7:30 start, which leaves time to make other plans.",
 	},
 ];
 
@@ -136,16 +148,16 @@ export const CYCLE_NUMBERS = [
 	{
 		value: CONFIRM_AT,
 		label: "Confirm",
-		body: "The tenth yes turns the lights on early and stops the nagging.",
+		body: "Two full sides of six. The night is confirmed early and the reminders stop.",
 	},
 	{
 		value: PLAY_AT,
 		label: "Minimum",
-		body: "Four on four with one guy rebounding for both teams. Below that we are not doing it.",
+		body: "Enough for 4 v 4. Below this at the verdict, the night is called off.",
 	},
 	{
 		value: CAPACITY,
 		label: "Capacity",
-		body: "Twelve is the good number. Fifteen is the one where somebody sits a whole game and is loud about it. Past that it is a waiting list with feelings.",
+		body: "Three sides of six, so one team rotates in after each game. The sheet takes no more than this.",
 	},
 ] as const;

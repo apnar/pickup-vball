@@ -66,11 +66,11 @@ export async function recordInvites(
 }
 
 /**
- * The last few runs that actually asked the list something, newest first.
+ * The last few nights that actually asked the list something, newest first.
  *
  * A game whose opening call never resolved is not in here -- it asked nobody,
  * so nobody's record should move for it. Nor is one still ahead of us, whose
- * answers are not all in. A run called off does count: the question went out,
+ * answers are not all in. A night called off does count: the question went out,
  * and not answering it is exactly the thing being measured.
  */
 async function recentCalledGames(

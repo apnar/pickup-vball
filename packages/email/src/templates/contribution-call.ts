@@ -7,7 +7,7 @@ export type ContributionCallInput = ContributionFacts & {
 };
 
 const TAIL =
-	"You are getting this because you are on the list. Everybody on it got the same one.";
+	"You are getting this because you are in the group. Everyone in it got the same email.";
 
 /** The ask, sent to everybody who is playing. */
 export function contributionCallEmail(input: ContributionCallInput): Rendered {
@@ -30,11 +30,11 @@ export function contributionCallDefaults(_amount: number): {
 	body: string;
 } {
 	return {
-		subject: "Gym money.",
+		subject: "Gym money",
 		body: [
-			"Sean has paid the county for the gym. Now the gym pays Sean back, which is you.",
-			"Everybody on the list owes the same amount. Whether you made every Monday or two of them is between you and your hamstring. The court was rented either way.",
-			"How to get it to him is below. Once it lands he marks you paid and you hear no more about it.",
+			"The gym rental has been paid, and this is everyone's share of it.",
+			"The amount is the same for everyone in the group, however many nights you made it to: the gym was booked for all of them.",
+			"How to pay is below. Once your payment comes in you will be marked as paid, and you will not get any reminders.",
 		].join("\n\n"),
 	};
 }

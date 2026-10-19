@@ -1,7 +1,13 @@
 import type { Rendered } from "../brevo";
-import { button, escapeHtml, layout, muted } from "../render";
+import { button, escapeHtml, layout, muted, para, urlLink } from "../render";
+import { SITE_NAME } from "../sender";
 
 export type WelcomeInput = { name: string | null; url: string };
+
+const KEY_NOTE =
+	"This link signs you in without a password. Please don't forward it: anyone who has it can sign in as you.";
+const PASSWORD_NOTE =
+	"Prefer a password? You can set one on your dashboard. The link keeps working either way.";
 
 /**
  * Someone was added to the list. Their link is their key to the site, so
@@ -9,32 +15,21 @@ export type WelcomeInput = { name: string | null; url: string };
  */
 export function welcomeEmail(input: WelcomeInput): Rendered {
 	const greeting = input.name ? `${input.name}, you` : "You";
+	const lead = `${greeting} have been added to ${SITE_NAME}. The day before each night you will get an email asking if you are in, maybe or out. Tap your answer and you are set.`;
 	const html = layout({
-		title: "You're on the list",
-		kicker: "You're in",
+		title: `Welcome to ${SITE_NAME}`,
+		kicker: "Welcome",
 		heading: "You're on the list.",
 		bodyHtml: [
-			`<p style="margin:0 0 14px; font-size:16px; line-height:1.5;">${escapeHtml(greeting)} are on the Monday night list. The evening before a run you get one email asking if you are in, out or maybe. Answer it and the rest sorts itself out.</p>`,
+			para(lead),
 			button("Open the site", input.url),
-			muted(
-				`Or paste this into a browser:<br><a href="${escapeHtml(input.url)}" style="color:#2f5f86; word-break:break-all;">${escapeHtml(input.url)}</a>`,
-			),
-			muted(
-				"That link is your key: it signs you in, every time, no password. Which also means don't forward it unless you want that guy on the sheet under your name.",
-			),
-			muted(
-				"Want a password instead? Set one on the dashboard. The links keep working either way.",
-			),
+			muted(`Or paste this into a browser:<br>${urlLink(input.url)}`),
+			muted(escapeHtml(KEY_NOTE)),
+			muted(escapeHtml(PASSWORD_NOTE)),
 		].join("\n"),
 	});
-	const text = [
-		`${greeting} are on the Monday night list. The evening before a run you get one email asking if you are in, out or maybe. Answer it and the rest sorts itself out.`,
-		"",
-		input.url,
-		"",
-		"That link is your key: it signs you in, every time, no password. Which also means don't forward it unless you want that guy on the sheet under your name.",
-		"",
-		"Want a password instead? Set one on the dashboard. The links keep working either way.",
-	].join("\n");
-	return { subject: "You're on the list.", html, text };
+	const text = [lead, "", input.url, "", KEY_NOTE, "", PASSWORD_NOTE].join(
+		"\n",
+	);
+	return { subject: `Welcome to ${SITE_NAME}`, html, text };
 }

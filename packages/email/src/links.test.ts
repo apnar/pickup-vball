@@ -8,7 +8,9 @@ describe("emailLink", () => {
 		expect(emailLink("https://vball.moco-pickup.com", "/#rsvp")).toBe(
 			`https://vball.moco-pickup.com/api/auth/link?k=${PARAM.key}&to=%2F%23rsvp`,
 		);
-		expect(emailLink("https://vball.moco-pickup.com", "/")).toContain("&to=%2F");
+		expect(emailLink("https://vball.moco-pickup.com", "/")).toContain(
+			"&to=%2F",
+		);
 	});
 });
 

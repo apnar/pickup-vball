@@ -55,7 +55,7 @@ export default {
 
 	/**
 	 * Cron Trigger (wrangler.jsonc `triggers.crons`, every half hour). Runs
-	 * the RSVP cycle -- the five emails and the 7:30 verdict, all of it
+	 * the RSVP cycle -- the five emails and the 5:30 verdict, all of it
 	 * described on /admin/cycle -- and tidies suspensions that have run out.
 	 * Test locally with
 	 * `curl "http://localhost:3001/cdn-cgi/local/scheduled?cron=0+*+*+*+*"`.

@@ -32,8 +32,8 @@ export type Tally = {
 
 /**
  * The excused are out of both numbers on purpose: "14 of 22 paid" has to be
- * a fraction somebody can close, and a man Sean let off is not a man who
- * still owes.
+ * a fraction somebody can close, and someone an admin excused is not
+ * someone who still owes.
  */
 export function tally(
 	rows: { status: ContributionStatus }[],
@@ -113,7 +113,7 @@ export type LedgerRow = {
 	status: ContributionStatus;
 	markedAt: Date | null;
 	/**
-	 * Where the person stands on the roster today. A man on a break still
+	 * Where the person stands on the roster today. Someone on a break still
 	 * owes but hears no reminder; a deactivated one is history on the page,
 	 * not a row that vanishes and throws the tally off.
 	 */

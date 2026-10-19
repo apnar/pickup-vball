@@ -1,29 +1,25 @@
 import type { Rendered } from "../brevo";
-import { button, escapeHtml, layout, muted } from "../render";
+import { button, escapeHtml, layout, muted, para, urlLink } from "../render";
 
 export type VerifyEmailInput = { name: string; url: string };
 
 /** Better Auth email verification. No list footer: this is not a list email. */
 export function verifyEmail(input: VerifyEmailInput): Rendered {
+	const lead = `${input.name}, please confirm that this is your email address.`;
+	const ignore = "Didn't sign up? You can ignore this email.";
 	const html = layout({
-		title: "Prove you're real",
+		title: "Confirm your email",
 		kicker: "Account",
-		heading: "Prove you're real.",
+		heading: "Confirm your email.",
 		bodyHtml: [
-			`<p style="margin:0 0 14px; font-size:16px; line-height:1.5;">${escapeHtml(input.name)}, click this so we know the address works. Nobody is checking your vertical.</p>`,
-			button("Verify my email", input.url),
+			para(lead),
+			button("Confirm my email", input.url),
 			muted(
-				`If the button is being difficult, paste this into a browser:<br><a href="${escapeHtml(input.url)}" style="color:#2f5f86; word-break:break-all;">${escapeHtml(input.url)}</a>`,
+				`If the button doesn't work, paste this into a browser:<br>${urlLink(input.url)}`,
 			),
-			muted("Didn't sign up? Ignore this and go stretch."),
+			muted(escapeHtml(ignore)),
 		].join("\n"),
 	});
-	const text = [
-		`${input.name}, click this so we know the address works. Nobody is checking your vertical.`,
-		"",
-		input.url,
-		"",
-		"Didn't sign up? Ignore this and go stretch.",
-	].join("\n");
-	return { subject: "Prove you're real", html, text };
+	const text = [lead, "", input.url, "", ignore].join("\n");
+	return { subject: "Confirm your email", html, text };
 }

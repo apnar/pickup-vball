@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+pickup-vball is Viroj's Pickup, an invite-only pickup volleyball group, served
+at https://vball.moco-pickup.com. It began as a copy of pickup-bball (the
+basketball group on moco-pickup.com) and keeps its architecture; the look,
+the copy and the numbers are its own. The design handoff it was built from
+(product spec, tokens, mockups) is summarised under "Design system" below.
+
 ## Commands
 
 pnpm + Turborepo. Run these from the repo root.
@@ -53,11 +59,10 @@ curl "http://localhost:3001/cdn-cgi/local/scheduled?cron=0+*+*+*+*"
 Local setup needs `apps/web/.dev.vars` (copy `.dev.vars.example`, set a random
 `BETTER_AUTH_SECRET`). Leave `BREVO_API_KEY` unset locally: the mailer then prints
 each email to the dev console with the placeholders filled in from the first
-recipient, so the sign-in link in the log is clickable. If it *is* set (the
-maintainer's machine has the real key, and the local D1 holds the real
-roster), strip it and restart before exercising any send; check that
-`mail.status` reports `dryRun: true` first. A local "test" send is otherwise
-a real one to everybody.
+recipient, so the sign-in link in the log is clickable. If it *is* set,
+strip it and restart before exercising any send; check that `mail.status`
+reports `dryRun: true` first. A local "test" send is otherwise a real one to
+everybody in the local database.
 
 ## Architecture
 
@@ -76,7 +81,7 @@ libraries; only `apps/web` builds):
 - `packages/auth` — Better Auth factory (`createAuth()`) plus the custom
   `email-link` plugin in `src/link.ts`.
 - `packages/api` — oRPC routers (`src/routers/*`), shared business logic
-  (`games.ts`, `mail.ts`, `run.ts`), and the cron job in `src/jobs/reminders.ts`.
+  (`games.ts`, `mail.ts`, `run.ts`), and the cron job in `src/jobs/rsvp-cycle.ts`.
 - `packages/email` — pure template/Brevo code (`src/index.ts`) plus
   `src/worker.ts`, the only file there that touches the Worker env.
 - `packages/env` — `env` re-exported from `cloudflare:workers`; the binding types
@@ -95,7 +100,7 @@ Everything is constructed per request: `createDb()`, `createAuth()`,
 - oRPC procedures come from `packages/api/src/index.ts`:
   `publicProcedure` / `protectedProcedure` / `adminProcedure`. `games.*` and
   `rsvp.*` reads are protected on purpose — a stranger must not learn the gym
-  address or the tip-off time. `gyms.*` and `permits.*` are admin-only; players
+  address or the start time. `gyms.*` and `permits.*` are admin-only; players
   see a gym only through the game it is attached to. `people.roster` is the
   player-facing view of the `user` table and returns strictly less than the
   admin `people.list` — no addresses, tokens, or break reasons.
@@ -121,7 +126,7 @@ only: it sorts the permit dropdown when booking and never gates anything.
 ### The RSVP cycle
 
 `packages/api/src/cycle.ts` is the single source of truth for the schedule and
-the thresholds (`CONFIRM_AT` 10, `PLAY_AT` 8). The job reads it, `/admin/cycle`
+the thresholds (`CONFIRM_AT` 12, `PLAY_AT` 8). The job reads it, `/admin/cycle`
 renders the same array as prose, so the documentation cannot drift. Keep that
 file free of drizzle and `cloudflare:workers` — the web app bundles it.
 
@@ -137,7 +142,7 @@ file free of drizzle and `cloudflare:workers` — the web app bundles it.
   job retries them every half hour. `email_send` is the record of real sends.
 - `jobs/stage-render.ts` is shared by the job and the admin preview, so a
   preview cannot show an email different from the one that goes out.
-- The tenth yes fires stage 03 inline from the rsvp mutations *and* from the
+- The twelfth yes fires stage 03 inline from the rsvp mutations *and* from the
   cron. The shared claim makes double-sending impossible; nothing plumbs an
   `ExecutionContext` to oRPC, so it is awaited rather than deferred.
 - `runInstant(date, time)` in `run.ts` converts the gym's wall clock to a UTC
@@ -194,7 +199,7 @@ place that decides what that means. Things that are easy to get wrong:
   Use `effectiveStatus` / `activeWhere` / `audienceWhere`, never a bare
   `status = 'active'`. The cron sweep is cosmetic housekeeping.
 - `banned` is a mirror of `status = 'deactivated'`, written in the same statement
-  so Better Auth blocks the password door. It is nullable (migration 0000 lacked
+  so Better Auth blocks the password door. It is nullable (the column has no
   NOT NULL) — never compare it with `= 0`.
 - Self-service paths (`unsuspend`, the unsubscribe form, the Brevo webhook) must
   never touch a deactivated row; the guards are in the `where` clauses.
@@ -255,13 +260,25 @@ templates, where one of them would forget. Every list send writes one
 - Imports: `@/*` inside `apps/web/src`, `@pickup-vball/<pkg>` across packages.
   Subpath imports are the norm (`@pickup-vball/db/people`,
   `@pickup-vball/ui/components/button`).
-- Design system lives in `packages/ui/src/styles/globals.css`: Barlow Condensed
-  headings over Barlow, steel-blue on a light ground, square corners
-  (`--radius: 0px`), hairline `border-divider`. Use the token utilities
-  (`bg-ground`, `text-ink`, `text-steel-700`, `font-heading`, `.kicker`, `.tnum`)
-  rather than raw Tailwind colors, and the `<Blueprint>` component rather than
-  hand-writing the framed/corner-marked look.
-- Standing copy and defaults (site name, tip-off, rules, conditions) live in
+- Design system ("Night Court") lives in `packages/ui/src/styles/globals.css`:
+  a dark navy ground with a hardwood-amber accent, Barlow Condensed 700-800
+  uppercase for headings, numbers and buttons over Barlow for body text,
+  rounded cards (`rounded-card` 16px, buttons `rounded-btn` 12px). Reverse
+  coed is always marked in teal (`revco`). The site is dark only. Use the
+  token utilities (`bg-ground`, `bg-surface`, `bg-deep`, `text-ink`,
+  `text-subtle`, `border-line`, `bg-amber`, `text-on-amber`, `bg-warn-bg`/
+  `text-warn`, `bg-danger-bg`/`text-danger`) and the helper classes
+  (`.panel`, `.panel-outline`, `.display`, `.kicker`, `.chip`, `.meter`,
+  `.tnum`) rather than raw Tailwind colors, and `<Panel>` for a card. Keep
+  secondary text at `text-subtle` (#A7B4C8) or lighter -- that is the AA line
+  on both the ground and a card; `text-faint` is for disabled controls only.
+  Touch targets are at least 44px and primary buttons 48-56px; the phone gets
+  a bottom tab bar (`TabBar` in `components/header.tsx`), a desktop the top
+  nav, and admin a sidebar.
+- Copy is plain, warm and brief. The basketball site's trash talk did not
+  come along: no jokes at the reader's expense, no guilt about not replying.
+  User-visible text says "night" where the code says `game`.
+- Standing copy and defaults (site name, start time, payment, rules, conditions) live in
   `apps/web/src/content/run.ts`; the numbers the API needs
   (`CAPACITY`, `RUN_TIMEZONE`, date/time formatting) live in
   `packages/api/src/run.ts`.

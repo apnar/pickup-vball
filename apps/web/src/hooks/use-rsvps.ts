@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import type { RsvpAnswer } from "@/lib/rsvp";
 import { orpc } from "@/utils/orpc";
 
-/** Query options for the next game's headcount; the home loader prefetches this. */
+/** Query options for the next night's headcount; the home loader prefetches this. */
 export const nextHeadcountOptions = () =>
 	orpc.rsvp.list.queryOptions({ input: {} });
 
@@ -75,7 +75,9 @@ export function useRsvps(gameId?: string) {
 			onSuccess: () => {
 				queryClient.invalidateQueries({ queryKey: orpc.rsvp.key() });
 				queryClient.invalidateQueries({ queryKey: orpc.people.key() });
-				toast.success("You're back on. Put your name in.");
+				toast.success(
+					"Welcome back. You can answer for this week’s nights again.",
+				);
 			},
 			onError,
 		}),

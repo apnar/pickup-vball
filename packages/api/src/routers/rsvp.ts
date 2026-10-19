@@ -20,12 +20,12 @@ import { CAPACITY, isAdmin, nameKeyOf } from "../run";
 const nameSchema = z
 	.string()
 	.trim()
-	.min(1, "Put a name in.")
-	.max(40, "That is not a name, that is a paragraph.")
+	.min(1, "Enter a name.")
+	.max(40, "Names can be up to 40 characters.")
 	// Braces are Brevo's template syntax, and a name is the one thing on the
 	// sheet a player types that ends up in everybody's email. The mailer
 	// neutralises them anyway; this just says no at the box.
-	.refine((v) => !/[{}]/.test(v), "Names don't have braces in them.");
+	.refine((v) => !/[{}]/.test(v), "Names can't contain { or }.");
 
 const answerSchema = z.enum(RSVP_RESPONSES);
 
@@ -57,7 +57,7 @@ async function listGame(
 	const state = userId ? await findPersonState(db, userId) : null;
 
 	// Who has not said a word. Only the server can work this out -- the client
-	// never sees a user id -- and it is the number the 2 PM prod is about.
+	// never sees a user id -- and it is the number the noon reminder is about.
 	const active = await listRecipients(db, "active");
 	const split = splitAudience(
 		rows.map((r) => ({
@@ -71,7 +71,7 @@ async function listGame(
 	);
 
 	// Who this person has brought before. Their own history only, and never a
-	// name that is already on tonight's sheet -- the box would just refuse it.
+	// name that is already on this night's sheet -- the box would just refuse it.
 	const brought = userId
 		? await db
 				.select({ name: rsvp.name, nameKey: rsvp.nameKey })
@@ -184,7 +184,7 @@ async function requireSpot(db: Context["db"], userId: string) {
 	}
 	if (status === "suspended") {
 		throw new ORPCError("BAD_REQUEST", {
-			message: "You're taking a break. Say you're back first.",
+			message: "You're on a break. Mark yourself as back first.",
 		});
 	}
 }
@@ -193,12 +193,12 @@ async function requireGame(db: Context["db"], id: string) {
 	const game = await findGame(db, id);
 	if (!game) {
 		throw new ORPCError("NOT_FOUND", {
-			message: "That game is not on the schedule.",
+			message: "That night is not on the schedule.",
 		});
 	}
 	if (game.status === "canceled") {
 		throw new ORPCError("BAD_REQUEST", {
-			message: "That run is off. Nothing to answer.",
+			message: "That night was called off, so there is nothing to answer.",
 		});
 	}
 	return game;
@@ -214,7 +214,7 @@ async function reread(context: Context, gameId: string, fallback: GameSummary) {
 }
 
 export const rsvpRouter = {
-	/** Headcount for a game; defaults to the next game. Null when nothing is booked. */
+	/** Headcount for a night; defaults to the next one. Null when nothing is booked. */
 	list: protectedProcedure
 		.input(z.object({ gameId: z.string().min(1).optional() }))
 		.handler(async ({ context, input }) => {
@@ -280,7 +280,7 @@ export const rsvpRouter = {
 				}
 			}
 
-			// The tenth yes turns the lights on immediately rather than at the
+			// The confirming yes takes effect immediately rather than at the
 			// next cron pass. Awaited rather than deferred: nothing plumbs an
 			// execution context to oRPC, and the cron would catch it anyway.
 			await confirmIfReady(context.db, game.id);
@@ -292,7 +292,7 @@ export const rsvpRouter = {
 	 *
 	 * Guests only. Everybody on the list has their own buttons and their own
 	 * emails, and typing a regular's name in for them takes the answer out of
-	 * their hands -- it also marks them answered, so the 2 PM prod skips the
+	 * their hands -- it also marks them answered, so the noon reminder skips the
 	 * one person who has not actually said anything.
 	 */
 	add: protectedProcedure
@@ -315,7 +315,7 @@ export const rsvpRouter = {
 				const listed = roster.find((p) => nameKeyOf(p.name ?? "") === nameKey);
 				if (listed) {
 					throw new ORPCError("BAD_REQUEST", {
-						message: `${listed.name} is on the list. They answer for themselves.`,
+						message: `${listed.name} is in the group and answers for themselves.`,
 					});
 				}
 			}
@@ -330,10 +330,10 @@ export const rsvpRouter = {
 				// Re-adding a name must not overwrite a deliberate answer that
 				// is not yours to overwrite. Somebody who said Out stays Out
 				// until they say otherwise -- otherwise a typo could push the
-				// count to ten and fire the confirmation email.
+				// count over the line and fire the confirmation email.
 				if (!canSet(existing, me.id, isAdmin(me))) {
 					throw new ORPCError("FORBIDDEN", {
-						message: `${name} answered for themselves. Leave it.`,
+						message: `${name} has already answered for themselves.`,
 					});
 				}
 				await context.db
@@ -389,12 +389,12 @@ export const rsvpRouter = {
 				.get();
 			if (!row) {
 				throw new ORPCError("NOT_FOUND", {
-					message: "That name is not on this game's sheet.",
+					message: "That name is not on this night's sheet.",
 				});
 			}
 			if (!canSet(row, me.id, isAdmin(me))) {
 				throw new ORPCError("FORBIDDEN", {
-					message: `That's ${row.name}'s to answer.`,
+					message: `You can't change ${row.name}'s answer.`,
 				});
 			}
 			if (row.userId === me.id && input.answer !== "out") {
@@ -423,7 +423,8 @@ export const rsvpRouter = {
 			const game = await requireGame(context.db, input.gameId);
 			if (game.decidedAt) {
 				throw new ORPCError("BAD_REQUEST", {
-					message: "Called at 7:31. The sheet is a record now.",
+					message:
+						"This night has been decided, so the sheet can no longer change.",
 				});
 			}
 			const me = context.session.user;
@@ -441,17 +442,17 @@ export const rsvpRouter = {
 				.get();
 			if (!row) {
 				throw new ORPCError("NOT_FOUND", {
-					message: "That name is not on this game's sheet.",
+					message: "That name is not on this night's sheet.",
 				});
 			}
 			if (row.userId !== null) {
 				throw new ORPCError("FORBIDDEN", {
-					message: `${row.name} is on the list. They take themselves off.`,
+					message: `${row.name} is in the group and can take themselves off.`,
 				});
 			}
 			if (!canSet(row, me.id, isAdmin(me))) {
 				throw new ORPCError("FORBIDDEN", {
-					message: `${row.name} is not yours to take off.`,
+					message: `Only the person who added ${row.name}, or an admin, can take them off.`,
 				});
 			}
 

@@ -34,7 +34,7 @@ async function setCoverage(
 		.all();
 	if (known.length !== unique.length) {
 		throw new ORPCError("NOT_FOUND", {
-			message: "One of those gyms is gone. Reload and try again.",
+			message: "One of those gyms no longer exists. Reload and try again.",
 		});
 	}
 	await db
@@ -88,13 +88,13 @@ export const permitsRouter = {
 	upload: adminProcedure
 		.input(
 			z.object({
-				label: z.string().trim().min(1, "Give it a label.").max(80),
+				label: z.string().trim().min(1, "Enter a label.").max(80),
 				/** Which courts this one piece of paper rents. */
 				gymIds: gymIdsSchema,
 				file: z
 					.file()
-					.max(MAX_PERMIT_BYTES, "Permits over 10 MB are not permits.")
-					.mime(["application/pdf"], "Only PDF permits, please."),
+					.max(MAX_PERMIT_BYTES, "The file can be at most 10 MB.")
+					.mime(["application/pdf"], "Permits must be PDF files."),
 			}),
 		)
 		.handler(async ({ context, input }) => {
@@ -133,7 +133,9 @@ export const permitsRouter = {
 				.where(eq(permit.id, input.id))
 				.get();
 			if (!row) {
-				throw new ORPCError("NOT_FOUND", { message: "No such permit." });
+				throw new ORPCError("NOT_FOUND", {
+					message: "That permit no longer exists.",
+				});
 			}
 			await setCoverage(context.db, input.id, input.gymIds);
 			return { ok: true };
@@ -149,7 +151,9 @@ export const permitsRouter = {
 				.where(eq(permit.id, input.id))
 				.get();
 			if (!row) {
-				throw new ORPCError("NOT_FOUND", { message: "No such permit." });
+				throw new ORPCError("NOT_FOUND", {
+					message: "That permit no longer exists.",
+				});
 			}
 			await context.env.PERMITS.delete(row.r2Key);
 			await context.db.delete(permit).where(eq(permit.id, row.id));

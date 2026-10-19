@@ -1,29 +1,28 @@
-import { Blueprint } from "@pickup-vball/ui/components/blueprint";
 import { Button, buttonVariants } from "@pickup-vball/ui/components/button";
+import { Panel } from "@pickup-vball/ui/components/panel";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 
-import { GameFacts } from "@/components/game-facts";
+import { dateParts, GameFacts } from "@/components/game-facts";
 import PageTitle from "@/components/page-title";
 import { ResponsePicker } from "@/components/response-picker";
+import { awayLine, Roster } from "@/components/rsvp-board";
 import { RsvpStatus } from "@/components/rsvp-status";
-import SectionKicker from "@/components/section-kicker";
 import { headcountOptions, useRsvps } from "@/hooks/use-rsvps";
 import type { RsvpAnswer } from "@/lib/rsvp";
 
 /**
- * Where every button in every cycle email lands.
+ * Where every button in every cycle email lands, and the detail page for a
+ * night.
  *
  * It reads. It does not write. Mail clients fetch link targets on their own,
- * and the last time something on this site acted on a bare GET it quietly
- * unsubscribed people who had never clicked anything -- see
- * `apps/web/src/server/unsubscribe.ts`. So the link carries the answer, the
- * page shows it, and a human taps once to record it. The mutation is a POST
- * that only an onClick fires; nothing in `beforeLoad`, the loader or render
- * touches the database.
+ * and acting on a bare GET once quietly unsubscribed people who had never
+ * clicked anything -- see `apps/web/src/server/unsubscribe.ts`. So the link
+ * carries the answer, the page shows it, and a person taps once to record
+ * it. The mutation is a POST that only an onClick fires; nothing in
+ * `beforeLoad`, the loader or render touches the database.
  */
 export const Route = createFileRoute("/_auth/rsvp/$gameId")({
 	// `.catch` rather than a hard failure: mail clients rewrite URLs, and a
@@ -38,22 +37,21 @@ export const Route = createFileRoute("/_auth/rsvp/$gameId")({
 	component: RsvpConfirmPage,
 });
 
-const HEADING: Record<RsvpAnswer, string> = {
-	in: "In. Recorded.",
-	maybe: "Maybe. Recorded, sort of.",
-	out: "Out. Recorded.",
+const DONE: Record<RsvpAnswer, string> = {
+	in: "You’re in. See you there.",
+	maybe: "Saved as maybe.",
+	out: "You’re out. Thanks for letting us know.",
 };
 
 /**
- * The button says "confirm", not the answer again. When it read "Yes, I'm in"
- * under a highlighted "I'm in" cell in the same steel, people took it for a
- * label of what they had already done and left the page with nothing
- * recorded.
+ * The button says "Save", not the answer again. When it repeated the answer
+ * under a highlighted cell with the same words, people took it for a label
+ * of what they had already done and left with nothing recorded.
  */
 const CONFIRM: Record<RsvpAnswer, string> = {
-	in: "Confirm: I'm in",
-	maybe: "Confirm: maybe",
-	out: "Confirm: I'm out",
+	in: "Save: I’m in",
+	maybe: "Save: maybe",
+	out: "Save: I’m out",
 };
 
 function RsvpConfirmPage() {
@@ -69,19 +67,13 @@ function RsvpConfirmPage() {
 
 	if (!state) {
 		return (
-			<section className="pt-18 pb-15">
+			<section className="flex flex-col items-start gap-6 pt-8 pb-12 md:pt-10">
 				<PageTitle
-					line1="That game is gone."
-					line2="Somebody moved it, or it was never there."
+					title="Night not found"
+					sub="It may have been moved or cancelled. Nothing was recorded."
 				/>
-				<p className="mt-7 max-w-[60ch] text-base leading-6">
-					Nothing was recorded. The schedule knows what is actually booked.
-				</p>
-				<Link
-					to="/schedule"
-					className={buttonVariants({ className: "mt-6 no-underline" })}
-				>
-					The schedule
+				<Link to="/schedule" className={buttonVariants()}>
+					See the schedule
 				</Link>
 			</section>
 		);
@@ -91,102 +83,121 @@ function RsvpConfirmPage() {
 	const away = viewer?.status === "suspended";
 	const locked = game.status === "canceled" || Boolean(game.decidedAt);
 	const mine = me ? (rsvps.find((r) => r.id === me)?.response ?? null) : null;
-	const committed = done ?? null;
+	const d = dateParts(game.date);
 
 	return (
-		<section className="pt-18 pb-15">
-			<PageTitle
-				line1={game.dateLabel}
-				line2={
-					committed
-						? HEADING[committed]
-						: locked
-							? "The count is closed."
-							: "Pick, then tap confirm. That's the sheet."
-				}
-			/>
+		<section className="flex flex-col gap-8 pt-6 pb-12 md:pt-10">
+			<div className="flex flex-col gap-3">
+				<Link
+					to="/"
+					className="-ml-2 flex min-h-11 w-fit items-center gap-1.5 px-2 font-semibold text-ink no-underline hover:text-ink"
+				>
+					<svg
+						aria-hidden="true"
+						width="20"
+						height="20"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="2.2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					>
+						<path d="M15 5l-7 7 7 7" />
+					</svg>
+					This week
+				</Link>
+				<span className="font-semibold text-[14px] text-amber tracking-[0.12em]">
+					{d.long}
+				</span>
+				<PageTitle
+					title={
+						done ? DONE[done] : locked ? "Answers are closed" : "Are you in?"
+					}
+				/>
+			</div>
 
-			<div className="mt-10 grid grid-cols-1 items-start gap-10 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-				<div>
-					<GameFacts game={game} />
-
-					{locked ? (
-						<p className="max-w-[52ch] text-[15px] text-neutral-700 leading-6">
-							Called at 7:31. Nothing you tap now changes it.
-						</p>
-					) : away ? (
-						<Blueprint className="border-amber-300 bg-amber-50 p-4">
-							<p className="m-0 text-[13px] text-amber-900 leading-5">
-								You're taking a break, so you're not on the sheet. Come back
-								first and the answer will stick.
+			<div className="flex flex-wrap items-start gap-8">
+				<div className="flex min-w-0 flex-[999_1_480px] flex-col gap-6">
+					<Panel className="flex flex-col gap-4">
+						{locked ? (
+							<p className="m-0 text-ink-soft">
+								This night has been decided, so answers can no longer change.
 							</p>
-							<Button
-								className="mt-3"
-								size="sm"
-								disabled={backPending}
-								onClick={() => comeBack()}
-							>
-								I'm back
-							</Button>
-						</Blueprint>
-					) : committed ? (
-						<div className="flex flex-wrap gap-2.5">
-							<Link
-								to="/"
-								hash="rsvp"
-								className={buttonVariants({ className: "no-underline" })}
-							>
-								The whole sheet
-							</Link>
-							<Button variant="ghost" onClick={() => setDone(null)}>
-								Change it
-							</Button>
-						</div>
-					) : (
-						<>
-							<ResponsePicker
-								name="confirm-answer"
-								legend={
-									mine ? `1 · You said ${mine}. Change it?` : "1 · Your answer"
-								}
-								value={picked}
-								disabled={isPending}
-								onPick={setPicked}
-								pending
-							/>
-							<p className="kicker mt-6 mb-2 text-steel-700">
-								2 · Tap to record it
-							</p>
-							<Button
-								size="lg"
-								className="w-full sm:w-auto"
-								disabled={isPending || !picked}
-								onClick={async () => {
-									if (!picked) return;
-									try {
-										await respond(picked);
-										setDone(picked);
-									} catch {
-										// The toast already said so.
+						) : away ? (
+							<div className="flex flex-col items-start gap-3 rounded-btn bg-warn-bg p-4 text-warn">
+								<p className="m-0 text-[15px]">
+									{awayLine(viewer)} Come back first and then your answer will
+									count.
+								</p>
+								<Button
+									size="sm"
+									disabled={backPending}
+									onClick={() => comeBack()}
+								>
+									I’m back
+								</Button>
+							</div>
+						) : done ? (
+							<div className="flex flex-wrap gap-2.5">
+								<Link to="/" hash="rsvp" className={buttonVariants()}>
+									See this week
+								</Link>
+								<Button variant="outline" onClick={() => setDone(null)}>
+									Change it
+								</Button>
+							</div>
+						) : (
+							<>
+								<ResponsePicker
+									name="confirm-answer"
+									legend={
+										mine
+											? `Your answer is ${mine}. Change it?`
+											: "Pick your answer"
 									}
-								}}
-							>
-								{picked ? CONFIRM[picked] : "Pick one first"}
-								<ArrowRight />
-							</Button>
-							<p className="mt-3 max-w-[52ch] text-[13px] text-neutral-700 leading-5">
-								Nothing is on the sheet until you tap that. Mail apps open links
-								on their own, and one of them once took half the roster off the
-								list. So the tap is yours.
-							</p>
-						</>
-					)}
+									value={picked}
+									disabled={isPending}
+									onPick={setPicked}
+									pending
+								/>
+								<Button
+									size="lg"
+									className="w-full"
+									disabled={isPending || !picked}
+									onClick={async () => {
+										if (!picked) return;
+										try {
+											await respond(picked);
+											setDone(picked);
+										} catch {
+											// The toast already said so.
+										}
+									}}
+								>
+									{picked ? CONFIRM[picked] : "Pick an answer first"}
+								</Button>
+								<p className="m-0 text-[14px] text-subtle">
+									Your answer is saved when you tap the button. Mail apps open
+									links on their own, so the link alone doesn’t change anything.
+								</p>
+							</>
+						)}
+					</Panel>
+
+					<Panel>
+						<RsvpStatus headcount={state} />
+					</Panel>
+
+					<Roster headcount={state} locked={locked} isPending={isPending} />
 				</div>
 
-				<div>
-					<SectionKicker className="mb-5">07 · Where it stands</SectionKicker>
-					<RsvpStatus headcount={state} />
-				</div>
+				<aside
+					aria-label="Night details"
+					className="flex min-w-0 flex-[1_1_280px] flex-col gap-4"
+				>
+					<GameFacts game={game} />
+				</aside>
 			</div>
 		</section>
 	);

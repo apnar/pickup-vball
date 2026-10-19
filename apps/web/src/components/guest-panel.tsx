@@ -1,5 +1,4 @@
 import type { Headcount } from "@pickup-vball/api/routers/rsvp";
-import { Blueprint } from "@pickup-vball/ui/components/blueprint";
 import { Button } from "@pickup-vball/ui/components/button";
 import { Input } from "@pickup-vball/ui/components/input";
 import { useState } from "react";
@@ -8,14 +7,14 @@ import { useClock } from "@/hooks/use-countdown";
 import { guestLine } from "@/lib/rsvp";
 
 /**
- * Guests: who you have brought tonight, and how keen the run is on more.
+ * Guests: who you are bringing, and whether the night needs more.
  *
- * The box is open whenever the count is; only the line above it changes, and
+ * The box is open whenever answers are; only the line above it changes, and
  * `guestLine` in lib/rsvp.ts says why. Nobody is stopped from putting a name
- * in early -- the night you already promised somebody is not the night to
- * argue with a form. Taking a guest back off is likewise never blocked: a
- * guest has no inbox and no buttons, so whoever vouched for them is the only
- * one who can say they are not coming.
+ * in early -- a guest you already invited is not something to argue with a
+ * form about. Taking a guest back off is likewise never blocked: a guest has
+ * no inbox and no buttons, so whoever added them is the only one who can say
+ * they are not coming.
  */
 export function GuestPanel({
 	headcount,
@@ -35,8 +34,9 @@ export function GuestPanel({
 
 	const lastCallAt =
 		game.cycle.stages.find((s) => s.key === "lastCall")?.at ?? null;
-	// Seeded from the payload, ticking in an effect, so the box opens by itself
-	// at six without a reload and without a hydration mismatch.
+	// Seeded from the payload, ticking in an effect, so the wording changes by
+	// itself at the last call without a reload and without a hydration
+	// mismatch.
 	const now = useClock(headcount.now, lastCallAt);
 	const lastCallPassed = lastCallAt ? now >= Date.parse(lastCallAt) : false;
 
@@ -49,19 +49,25 @@ export function GuestPanel({
 	const mine = rsvps.filter((r) => r.guest && r.mine);
 
 	return (
-		<Blueprint className="mt-6 max-w-[480px] p-5">
-			<span className="kicker block text-steel-700">Guests</span>
+		<section
+			aria-labelledby="guests-h"
+			className="panel-outline flex flex-col gap-3"
+		>
+			<h3
+				id="guests-h"
+				className="m-0 font-bold font-heading text-[20px] tracking-[0.04em]"
+			>
+				Bringing a guest
+			</h3>
 
 			{mine.length > 0 ? (
-				<ul className="mt-3 mb-1 list-none border-divider border-t p-0">
+				<ul className="m-0 flex list-none flex-col gap-2 p-0">
 					{mine.map((r) => (
 						<li
 							key={r.id}
-							className="flex items-center justify-between gap-3 border-ink/8 border-b py-2"
+							className="flex items-center justify-between gap-3 rounded-field bg-surface-alt py-1 pr-1 pl-3"
 						>
-							<span className="font-heading font-semibold text-lg uppercase leading-6 tracking-[0.02em]">
-								{r.name}
-							</span>
+							<span className="font-medium">{r.name}</span>
 							<Button
 								size="sm"
 								variant="ghost"
@@ -75,12 +81,12 @@ export function GuestPanel({
 				</ul>
 			) : null}
 
-			<p className="mt-3 mb-0 text-[13px] text-neutral-700 leading-5">{line}</p>
+			<p className="m-0 text-[14px] text-subtle">{line}</p>
 
 			{locked ? null : (
 				<>
 					<form
-						className="mt-4 flex gap-2.5"
+						className="flex gap-2.5"
 						onSubmit={async (e) => {
 							e.preventDefault();
 							if (!draft.trim()) return;
@@ -93,8 +99,8 @@ export function GuestPanel({
 						}}
 					>
 						<Input
-							aria-label="Add a guest"
-							placeholder="Add a guest"
+							aria-label="Guest's name"
+							placeholder="Guest's name"
 							maxLength={40}
 							value={draft}
 							onChange={(e) => setDraft(e.target.value)}
@@ -105,11 +111,9 @@ export function GuestPanel({
 					</form>
 
 					{headcount.guestSuggestions.length > 0 ? (
-						<div className="mt-3">
-							<span className="kicker block text-[11px] text-steel-700">
-								Brought before
-							</span>
-							<div className="mt-2 flex flex-wrap gap-2">
+						<div className="flex flex-col gap-2">
+							<span className="kicker">Brought before</span>
+							<div className="flex flex-wrap gap-2">
 								{headcount.guestSuggestions.map((name) => (
 									<Button
 										key={name}
@@ -125,12 +129,12 @@ export function GuestPanel({
 						</div>
 					) : null}
 
-					<p className="mt-4 mb-0 text-[13px] text-neutral-700 leading-5">
-						You answer for anyone you drag along, and they hear nothing from us
-						-- no emails, no cancellation. That part is on you.
+					<p className="m-0 text-[13px] text-subtle">
+						Guests don’t get any emails from us, so if the night is called off,
+						please let them know yourself.
 					</p>
 				</>
 			)}
-		</Blueprint>
+		</section>
 	);
 }

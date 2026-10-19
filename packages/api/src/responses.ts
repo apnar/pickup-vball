@@ -2,7 +2,7 @@
  * How well somebody answers the calls to play.
  *
  * Pure, and tallied in TypeScript for the same reason `audience.ts` is: the
- * list is tens of people and ten runs is a few hundred rows, against which a
+ * list is tens of people and ten nights is a few hundred rows, against which a
  * grouped `left join` buys nothing and costs the one bug that shape is prone
  * to here -- a second matching row on one side quietly inflating the
  * denominator. Being pure is also what makes the arithmetic testable without
@@ -12,15 +12,15 @@
 import type { RsvpResponse } from "@pickup-vball/db/schema/rsvp";
 
 /**
- * How far back the record on /admin/users reaches. Ten runs is most of a
- * season of Mondays: long enough that one missed week is not a verdict, short
- * enough that a man who has started turning up again looks like one.
+ * How far back the record on /admin/users reaches. Ten nights is a few weeks
+ * of play: long enough that one missed night is not a verdict, short enough
+ * that someone who has started turning up again looks like it.
  */
 export const RESPONSE_WINDOW = 10;
 
 export type ResponseRate = {
 	/**
-	 * Runs in the window this person was asked about at all -- the number the
+	 * Nights in the window this person was asked about at all -- the number the
 	 * other three are out of. Somebody added last week is 0 of 1, not 0 of 10.
 	 */
 	of: number;
@@ -66,7 +66,7 @@ const key = (gameId: string, userId: string) => `${gameId}\u0000${userId}`;
  *
  * Counted off the invites, never off the roster as it stands today: the
  * snapshot is the only thing that knows who was on the list in March, and
- * counting the other way marks a newcomer down for runs nobody asked him
+ * counting the other way marks a newcomer down for nights nobody asked them
  * about.
  */
 export function tallyResponses(

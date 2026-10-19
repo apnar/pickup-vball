@@ -38,7 +38,7 @@ const requireAdmin = o.middleware(async ({ context, next }) => {
 	// something before the cache runs out.
 	if (!isAdmin(current.person)) {
 		throw new ORPCError("FORBIDDEN", {
-			message: "Admins only. Ask Sean.",
+			message: "Only an admin can do that.",
 		});
 	}
 	return next({ context: current });

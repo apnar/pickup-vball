@@ -15,8 +15,8 @@ import { game } from "./game";
  *
  * Without this there is no honest way to ask whether somebody answers the
  * calls to play. `user` holds one status and no history, so a break last
- * March is unrecoverable by tonight; and a man added in April cannot be
- * marked down for the three runs he was never asked about. So stage 01
+ * March is unrecoverable by tonight; and someone added in April cannot be
+ * marked down for the three nights they were never asked about. So stage 01
  * writes down the roster it found -- one row per person, `on_break` for the
  * ones it deliberately skipped -- and the response rate is counted against
  * that, the same way the contribution ledger is a snapshot of the list at

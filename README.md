@@ -1,6 +1,16 @@
 # pickup-vball
 
-App to organize a group of folks to get together and play basketball weekly.
+Viroj's Pickup: the site for an invite-only pickup volleyball group in
+Montgomery County, MD, served at **https://vball.moco-pickup.com**. The admin
+books school gyms most nights of the week; players see the nights, RSVP in,
+maybe or out, and get the address and the verdict by email.
+
+It started as a copy of [pickup-bball](https://github.com/apnar/pickup-bball)
+(the Monday basketball group on moco-pickup.com) and keeps its architecture:
+one Cloudflare Worker, one D1 database, sign-in links in every email, and an
+RSVP cycle that runs itself. The look and the copy are new -- see "Design"
+below -- and the volleyball-specific product (credits, check-in, skill
+levels, formats) is planned rather than built; see "What's next".
 
 This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines React, TanStack Start, Hono, ORPC, and more.
 
@@ -11,7 +21,7 @@ This project was created with [Better-T-Stack](https://github.com/AmanVarshney01
 - **TailwindCSS** - Utility-first CSS for rapid UI development
 - **Shared UI package** - shadcn/ui primitives live in `packages/ui`
 - **Hono** - API routes, served from inside the TanStack Start Worker
-- **oRPC** - End-to-end type-safe APIs with OpenAPI integration
+- **oRPC** - End-to-end type-safe RPC between the pages and the API
 - **Cloudflare Workers** - Hosting for the whole site, single Worker
 - **Drizzle** - TypeScript-first ORM
 - **Cloudflare D1** - SQLite database
@@ -36,11 +46,10 @@ The whole site runs as a single Cloudflare Worker on the free plan:
 - The Hono API lives inside the same Worker at `/api/*` (`apps/web/src/server/app.ts`, mounted by `apps/web/src/routes/api/$.ts`). Same origin means no CORS and ordinary same-site cookies.
   - `/api/auth/*` - Better Auth
   - `/api/rpc` - oRPC (the web app calls this from the browser and calls the router directly during SSR)
-  - `/api/reference` - OpenAPI reference
   - `/api/unsubscribe/:token` - one-click unsubscribe pages for list emails
   - `/api/brevo/webhook` - Brevo tells the app who unsubscribed, bounced or complained
   - `/api/health` - health check
-- A Cron Trigger runs the Worker's `scheduled` handler (`apps/web/src/server.ts`) every half hour. It runs the RSVP cycle: five emails on a fixed clock and the 7:30 PM verdict on whether there is a run. See "The RSVP cycle" below.
+- A Cron Trigger runs the Worker's `scheduled` handler (`apps/web/src/server.ts`) every half hour. It runs the RSVP cycle: five emails on a fixed clock and the 5:30 PM verdict on whether a night is on. See "The RSVP cycle" below.
 - The database is Cloudflare D1 (SQLite) accessed through Drizzle via the `DB` binding. Env vars, secrets and bindings come from `cloudflare:workers` (typed in `packages/env/env.d.ts`, which must match `apps/web/wrangler.jsonc`).
 
 ## Local development
@@ -62,10 +71,10 @@ Open [http://localhost:3001](http://localhost:3001).
 
 ## Who sees what
 
-The site is two sites wearing one coat.
+The site shows strangers one page and players everything else.
 
-- **Anonymous visitors** get the pitch: Monday nights, somewhere in Montgomery County, the rules, and how to get in. No court, no tip-off time, no booked dates, no headcount, no names.
-- **Players** — anyone with a session — get everything: the next game with its court and time, the schedule, the roster, and one-tap RSVP under their own name. When a call for gym money is open they also see their own row on it — owed, paid or excused — and nobody else's.
+- **Anonymous visitors** get a short description: pickup volleyball most weeknights, somewhere in Montgomery County, the house rules, and how to get in. No gym, no start time, no booked dates, no headcount, no names.
+- **Players** — anyone with a session — get everything: the next night with its gym and time, the schedule, the roster, and one-tap RSVP under their own name. When a call for gym money is open they also see their own row on it — owed, paid or excused — and nobody else's.
 
 Nobody signs themselves up. Public sign-up is closed (`emailAndPassword.disableSignUp`), and there is no join form. An admin adds an address on `/admin/users`, the welcome email goes out, and **every link in every email that person gets is unique to them and signs them in when clicked**. That link is a bearer token, which is why the emails say not to forward it. The one exception is the permit PDF: it is meant to be waved at gym staff, so its URL carries nothing.
 
@@ -79,7 +88,7 @@ Sessions last 180 days and roll forward. The session cookie caches the user for 
 | **Suspended** | only on an explicit "everyone" send | yes | no | the person, or an admin | on its own date, or "I'm back" |
 | **Deactivated** | never | no | no | **an admin** | an admin |
 
-Both non-active states carry a reason and record who set them; a suspension can also carry a return date. There is no unsubscribe that leaves somebody on the roster: email is how this group talks, so stepping away from the email is stepping away from the Mondays, and it is temporary by default because the usual cause is a torn calf. A suspension is stored as `status = 'suspended'` plus `suspended_until`, and **a date in the past already counts as active** — `effectiveStatus` in `packages/db/src/people.ts` decides, so nobody is stranded by a cron that did not run. The hourly job only tidies the row.
+Both non-active states carry a reason and record who set them; a suspension can also carry a return date. There is no unsubscribe that leaves somebody on the roster: email is how this group talks, so stepping away from the email is stepping away from the nights, and it is temporary by default because the usual cause is an injury or a busy month. A suspension is stored as `status = 'suspended'` plus `suspended_until`, and **a date in the past already counts as active** — `effectiveStatus` in `packages/db/src/people.ts` decides, so nobody is stranded by a cron that did not run. The hourly job only tidies the row.
 
 Losing access is deactivation, and only that: it is the one thing that sets Better Auth's `banned` (in the same statement, so the framework closes the password door), revokes every session, and makes the person's emailed links redirect to `/login?error=revoked`. Nothing is ever deleted, and an admin can undo it. The session cookie caches the user for five minutes, but every API call re-reads the person's row first (`requireAuth` in `packages/api/src/index.ts`), so a just-deactivated player gets UNAUTHORIZED on the next call and a just-demoted admin gets FORBIDDEN, cache or no cache. Only the page shell they already have on screen outlives the change.
 
@@ -87,7 +96,7 @@ Passwords are optional for players. Password sign-in is the default form on `/lo
 
 ## Games, permits and admins
 
-A game exists only once a gym has been rented. Admins keep the list of courts, book games on them and file the permit PDFs; players see the schedule and the next game's headcount.
+A night (a `game` row in the code) exists only once a gym has been rented. Admins keep the list of gyms, book nights in them and file the permit PDFs; players see the schedule and the next night's headcount.
 
 - **Admins** are accounts with `role = 'admin'` (Better Auth's admin plugin). Promote the first one with a SQL command, then use the Users tab on `/admin` to promote others:
 
@@ -107,23 +116,23 @@ pnpm --filter web exec wrangler d1 execute DB --remote --command "insert into us
 pnpm --filter web exec wrangler d1 execute DB --remote --command "select link_token from user where email='you@example.com'"
 ```
 
-  Open `https://moco-pickup.com/api/auth/link?k=<that token>`. It signs you in, and is the same link the welcome email would have carried. Then add everyone else from `/admin/users`.
-- **Gyms** live in the `gym` table (name, address, notes) and are managed on `/admin/gyms`. A court is written down once -- the address, and the "park by the back lot, the side door is the open one" that used to live in somebody's texts -- and every game, email and permit reads the same answer. Both are shown to players with the game, so the address is in the email they read in the car.
-- **Games** live in the `game` table (date, tip-off, `gym_id`, notes, optional permit). Admins manage them on `/admin`, where the court is a dropdown that defaults to **the gym booked most recently**, because the next game is nearly always at the last one. A game cannot exist without a gym (`gym_id` is NOT NULL), and a gym with games on it cannot be deleted until they are moved or gone. The home page shows the next game on or after today; `/schedule` lists upcoming and recent games. Both are players-only.
-- **Permits** are PDFs stored in the `PERMITS` R2 bucket (`pickup-vball-permits`) with a row in the `permit` table. Admins upload them on `/admin/permits` and attach them to games. On upload they also tick **which courts the permit covers** -- one piece of paper from the county often rents two gyms -- which is a set of rows in `permit_gym` and can be re-ticked later from the Courts button on any permit. Coverage is paperwork, not a booking: it sorts the permit dropdown when an admin books a game, and nothing more. Anyone with the link can open `/api/permits/<id>/file` (add `?download=1` to download), so a permit can be shown to gym staff from any phone.
+  Open `https://vball.moco-pickup.com/api/auth/link?k=<that token>`. It signs you in, and is the same link the welcome email would have carried. Then add everyone else from `/admin/users`.
+- **Gyms** live in the `gym` table (name, address, notes) and are managed on `/admin/gyms`. A gym is written down once -- the address, and the "use the side door by the tennis courts" that would otherwise live in somebody's texts -- and every night, email and permit reads the same answer. Both are shown to players with the game, so the address is in the email they read in the car.
+- **Games** live in the `game` table (date, start, `gym_id`, notes, optional permit). Admins manage them on `/admin` (Nights), where the gym is a dropdown that defaults to **the gym booked most recently**, because the next night is usually at the same one. A game cannot exist without a gym (`gym_id` is NOT NULL), and a gym with games on it cannot be deleted until they are moved or gone. The home page shows the next game on or after today; `/schedule` lists upcoming and recent games. Both are players-only.
+- **Permits** are PDFs stored in the `PERMITS` R2 bucket (`pickup-vball-permits`) with a row in the `permit` table. Admins upload them on `/admin/permits` and attach them to games. On upload they also tick **which gyms the permit covers** -- one piece of paper from the county often rents two gyms -- which is a set of rows in `permit_gym` and can be re-ticked later from the Gyms button on any permit. Coverage is paperwork, not a booking: it sorts the permit dropdown when an admin books a game, and nothing more. Anyone with the link can open `/api/permits/<id>/file` (add `?download=1` to download), so a permit can be shown to gym staff from any phone.
 - **Headcount** rows in `rsvp` belong to a game (`game_id`). A player taps "I'm in as {name}" to put themselves on the sheet (`rsvp.addMe`, which claims the row by `user_id` and marks it "you"), and can type a friend's name in as well. Deleting a game deletes its headcount.
 
-The oRPC procedures are `account.*`, `games.*`, `gyms.*`, `permits.*`, `rsvp.*`, `people.*`, `mail.*` and `contributions.*` under `packages/api/src/routers`. Admin-only procedures use `adminProcedure` from `packages/api/src/index.ts`; `games.*` and `rsvp.*` reads are `protectedProcedure`, so a stranger gets UNAUTHORIZED rather than the address of the gym. Every procedure is POST-only (`StrictGetMethodPlugin`): the RPC protocol would otherwise take GET with the input in the query string, and a Lax cookie rides along on a top-level GET, which turns any link into a click-to-act-as-you. There is no OpenAPI handler and no `/api/reference`. `/roster` is built from the `user` table by `people.roster`, ranked by Mondays actually attended -- a `protectedProcedure` that deliberately returns less than the admin `people.list`: names, standing and counts, never addresses, tokens or the reason somebody is on a break. Rules and game conditions remain plain content in `apps/web/src/content/run.ts`.
+The oRPC procedures are `account.*`, `games.*`, `gyms.*`, `permits.*`, `rsvp.*`, `people.*`, `mail.*` and `contributions.*` under `packages/api/src/routers`. Admin-only procedures use `adminProcedure` from `packages/api/src/index.ts`; `games.*` and `rsvp.*` reads are `protectedProcedure`, so a stranger gets UNAUTHORIZED rather than the address of the gym. Every procedure is POST-only (`StrictGetMethodPlugin`): the RPC protocol would otherwise take GET with the input in the query string, and a Lax cookie rides along on a top-level GET, which turns any link into a click-to-act-as-you. There is no OpenAPI handler and no `/api/reference`. `/roster` is built from the `user` table by `people.roster`, ranked by nights actually played -- a `protectedProcedure` that deliberately returns less than the admin `people.list`: names, standing and counts, never addresses, tokens or the reason somebody is on a break. Rules and game conditions remain plain content in `apps/web/src/content/run.ts`.
 
 ## Gym money
 
-Sean fronts the county's rental and the list pays him back. A **call** for money is written once on `/admin/contributions` (the Money tab): a subject, the body, a whole-dollar amount per person, and one line on how to get it to Sean. The amount and the instructions come back prefilled next time, so they are typed once. Preview it, send yourself a copy, then send it; it goes to the **active** list and nobody else.
+Viroj fronts the county's rental and the group pays him back (Venmo @Viroj7, or cash). A **call** for money is written once on `/admin/contributions` (the Gym money tab): a subject, the body, a whole-dollar amount per person, and one line on how to pay. The amount and the instructions come back prefilled next time, so they are typed once. Preview it, send yourself a copy, then send it; it goes to the **active** list and nobody else.
 
 - **The ledger is a snapshot.** Sending the call writes one `contribution_call` row and one `contribution` row per person who was on the active list at that moment. Somebody added next week does not owe for a gym they never played in; somebody who takes a break mid-call still does.
 - **One call is open at a time.** The page tracks the open call: a tally line ("14 of 22 paid, $560 of $880."), a table of everybody billed, and per-row **Paid**, **Excuse** and **Not paid** buttons. An excused person is out of both numbers, not counted as paid. Trying to put out a second call while one is open is refused in words; a partial unique index on `contribution_call` backs that up for the double-click the words cannot catch.
 - **Reminders go by hand**, from the same page, to whoever is still unpaid *and* still on the active list. Somebody on a break owes but is not nagged; the page says how many are in that spot. Only a real send stamps `last_reminded_at`.
-- **Close the books** when Sean is done chasing. Reminders stop, the players' notices go quiet, and the call moves to the "Past calls" list with its final tally. Marks on a closed call are refused.
-- **Players** see their own row only: a "Gym money" line on `/dashboard`, and an amber strip on the home page while they still owe. Neither page writes anything; marking paid is Sean's job, which is also why the emails carry no "I paid" link (mail clients prefetch links).
+- **Close the books** when everyone has paid or been excused. Reminders stop, the players' notices go quiet, and the call moves to the "Past calls" list with its final tally. Marks on a closed call are refused.
+- **Players** see their own row only: a "Gym money" line on `/dashboard`, and an amber strip on the home page while they still owe. Neither page writes anything; marking paid is an admin's job, which is also why the emails carry no "I paid" link (mail clients prefetch links).
 
 Both emails land on `/dashboard` through the reader's own sign-in link and are logged in `email_send` as `contribution_call` and `contribution_reminder`.
 
@@ -132,7 +141,7 @@ Both emails land on `/dashboard` through the reader's own sign-in link and are l
 Players hear about games by email, and get in through the links in them. Brevo delivers; the app owns the list, the templates and the log.
 
 - **Who gets it.** The `user` table — the same rows that decide who is a player, because there is only one list. Admins add people on `/admin/users` (`source = 'admin'`); older rows came from the site form (`site`) and the old public sign-up (`signup`). Each person has an `unsubscribe_token` for the footer link and a `link_token` for the sign-in links, both plain text (they ride in every email anyway) and both stamped by the `user.create` hook, so nobody can exist without a way in.
-- **Which audience.** Game announcements and game-day reminders always go to **active** people only; somebody nursing a calf does not need a 9 AM headcount. The ad-hoc message on `/admin/email` offers **Active** (default) or **Everyone**, where Everyone also reaches people on a break. Neither audience ever includes anybody deactivated. `email_send.audience` records which was used. The one query behind all of it is `listRecipients` in `packages/db/src/people.ts`.
+- **Which audience.** Game announcements and game-day reminders always go to **active** people only; somebody on a break does not need the reminders. The ad-hoc message on `/admin/email` offers **Active** (default) or **Everyone**, where Everyone also reaches people on a break. Neither audience ever includes anybody deactivated. `email_send.audience` records which was used. The one query behind all of it is `listRecipients` in `packages/db/src/people.ts`.
 - **Stepping away.** The footer of every list email links to `/api/unsubscribe/<token>`, which no longer unsubscribes anybody on sight — it shows a form asking for how long and why, and only the POST acts. (That also fixes a real bug: mail clients prefetch link targets, which used to unsubscribe people who never clicked.) A mail client's own one-click `List-Unsubscribe-Post` sends no form at all, so it lands as an open-ended break. Players can do the same thing from `/dashboard` or straight from the RSVP board, and come back from any of them in one tap.
 - **How a link signs you in.** Every link in a list email points at `/api/auth/link?k=<link_token>&to=<path>`, a GET endpoint added by the `email-link` plugin in `packages/auth/src/link.ts`. It finds the person, marks an unverified address verified, opens a session and redirects to `to` — which is checked by `safeReturnPath` and falls back to `/` for anything that points off this site. An unknown token lands on `/login?error=link`, a deactivated one on `/login?error=revoked`, an admin's with a password set on `/login?error=admin` (see "The one list"). Those checks are written out here rather than left to the admin plugin: this endpoint mints its own session, so it is the thing standing between a revoked player and the gym address. The token is a bearer credential, so **the request log prints paths without query strings** and nothing else may log a URL. If a link does get out -- a forwarded email, a screenshot -- "New link" on `/admin/users` (`people.rotateLink`) kills every link that person was ever sent and emails a fresh one.
 - **Braces in what people type.** Brevo runs its template language over every list email (that is how the per-recipient placeholders get filled), so a guest called `{% if %}` would have the whole send rejected. The mailer runs `sealTemplate` over the finished subject, HTML and text: a zero-width space after any `{` that opens a tag, everywhere except inside our own placeholders. Names also refuse braces at the box.
@@ -142,7 +151,8 @@ Players hear about games by email, and get in through the links in them. Brevo d
   - *Message* — anything an admin types on `/admin/email`. "Send to me first" delivers a test copy to the signed-in admin only, with their own token substituted so the links are real.
   - *Gym money* — the call for contributions and the reminder to the unpaid, both sent by hand from `/admin/contributions`. See "Gym money" above.
   - *Account* — Better Auth's password reset from `/forgot-password`, and the verification email left over from the sign-up era. These carry no unsubscribe link.
-- **Sender.** `info@moco-pickup.com`, set in `packages/email/src/sender.ts`. The address and the domain's DNS records are configured in Brevo.
+- **Sender.** "Viroj’s Pickup" <`info@moco-pickup.com`>, set in `packages/email/src/sender.ts` -- a placeholder borrowed from the basketball site until this one gets its own sender. The domain's DNS records are already authenticated in Brevo, so any address on moco-pickup.com can be added as a sender there.
+- **Not switched on yet.** Production has no `BREVO_API_KEY`, so every email is printed to the Worker log instead of sent (Workers Logs in the Cloudflare dashboard, or `pnpm --filter web exec wrangler tail`). That includes the welcome emails with sign-in links, so until email is on, new players have to be let in by hand. Set the key (below) to start sending.
 - **Log.** Every list send writes one `email_send` row (kind, subject, recipient count, failures, Brevo message ids). `/admin/email` shows the last twenty.
 - **Batching and personalisation.** One Brevo request carries up to 99 personalised copies (`messageVersions`), so a full list costs one or two subrequests. Each copy gets `params.name`, `params.unsubscribeUrl` and `params.key` — the last is what turns the shared template's links into that one person's sign-in links. Without `BREVO_API_KEY` the email is printed instead, with those placeholders filled in from the first recipient so the link in the console is clickable.
 - **Brevo's own unsubscribe.** Brevo adds its own `List-Unsubscribe` header to every email (ours is replaced), so a player can also stop the mail from the Unsubscribe button in their mail app. That puts them on Brevo's transactional blocklist, and Brevo tells the app through a webhook at `/api/brevo/webhook` (`apps/web/src/server/brevo-webhook.ts`). All four events — unsubscribe, hard bounce, spam complaint, invalid address — put the person on an **open-ended break**, never a deactivation: not being able to reach somebody is not grounds for throwing them out, and only an admin does that. The reason is written for them ("Email is bouncing.") so the admin page shows it came from Brevo and not from them, and only somebody currently active is touched, so a repeat event cannot clobber a reason they wrote themselves. Every path back — the admin page, the dashboard, the email footer's undo — lifts Brevo's blocklist too, or they would read as active and be quietly undeliverable.
@@ -156,12 +166,12 @@ Setting it up:
 
    ```bash
    curl -H "api-key: $BREVO_API_KEY" -H "content-type: application/json" https://api.brevo.com/v3/webhooks \
-     -d '{"url":"https://moco-pickup.com/api/brevo/webhook","type":"transactional","events":["unsubscribed","hardBounce","spam","invalid"],"auth":{"type":"bearer","token":"<the token>"}}'
+     -d '{"url":"https://vball.moco-pickup.com/api/brevo/webhook","type":"transactional","events":["unsubscribed","hardBounce","spam","invalid"],"auth":{"type":"bearer","token":"<the token>"}}'
    ```
 
    Without the secret the route answers 404, so a missing webhook never breaks anything else.
 5. Rate limiting. Better Auth's limiter keeps its counts in D1 (`rate_limit`, migration 0010) keyed by `cf-connecting-ip`, so the password door, the reset form and the link endpoint are actually limited across the edge. The one public oRPC call, `people.requestLink`, has only its per-address ten-minute cooldown; put a **Cloudflare WAF rate-limiting rule** in front of it and the auth routes (zone > Security > WAF > Rate limiting rules): something like 20 requests per minute per IP on `/api/auth/*` and 5 per minute on `/api/rpc/people/requestLink`. The rule lives in the dashboard, not in this repo.
-6. To exercise the cycle locally with the dev server running: `curl "http://localhost:3001/cdn-cgi/local/scheduled?cron=0+*+*+*+*"`. **Leave `BREVO_API_KEY` unset while you do**, or the run mails everybody in the local database for real.
+6. To exercise the cycle locally with the dev server running: `curl "http://localhost:3001/cdn-cgi/local/scheduled?cron=0+*+*+*+*"`. **Leave `BREVO_API_KEY` unset while you do**, or the job mails everybody in the local database for real.
 
 The templates and Brevo client in `packages/email` are pure functions with tests: `pnpm run test`.
 
@@ -173,38 +183,43 @@ claude mcp add --transport http --scope user brevo https://mcp.brevo.com/v1/brev
 
 ## The RSVP cycle
 
-Nothing is emailed when a game is booked. A run asks the list on a fixed clock
-instead, and decides itself at half past seven.
+Nothing is emailed when a night is booked. Each night asks the group on a
+fixed clock instead, and decides itself at half past five -- two hours before
+a 7:30 start.
 
 | # | When | Who | What |
 |---|---|---|---|
-| 01 | 5:00 PM the day before | everybody active | there is a run tomorrow; in, out or maybe |
-| 02 | 2:00 PM game day, only under 10 in | only those who have not answered | the names already in, and how many short |
-| 03 | the moment the 10th yes lands | everyone in or maybe | the run is on |
-| 04 | 6:00 PM game day, only under 10 in | the maybes and the silent | last call |
-| 05 | 7:30 PM game day | everyone who answered — and if it is off, everybody else | 8 or more in and it happens; fewer and it does not |
+| 01 | 5:00 PM the day before | everybody active | there is a night tomorrow; in, maybe or out |
+| 02 | noon on the day, only under 12 in | only those who have not answered | the names already in, and how many short |
+| 03 | the moment the 12th yes lands | everyone in or maybe | the night is on |
+| 04 | 3:30 PM on the day, only under 12 in | the maybes and anyone who has not answered | last call |
+| 05 | 5:30 PM on the day | everyone who answered — and if it is off, everybody else | 8 or more in and it happens; fewer and it does not |
 
-`CONFIRM_AT` (10), `PLAY_AT` (8) and the stage times live in
+`CONFIRM_AT` (12, two full sides of six), `PLAY_AT` (8, enough for 4 v 4)
+and the stage times live in
 `packages/api/src/cycle.ts`, and `/admin/cycle` renders that same array — so
 the write-up in the admin section cannot describe a schedule the job is not
-keeping. `CAPACITY` (15 -- twelve is the good number, fifteen is what we
-tolerate) stays in `packages/api/src/run.ts` with the rest of the facts about
-the run.
+keeping. `CAPACITY` (18, three sides of six) stays in
+`packages/api/src/run.ts` with the rest of the facts about the nights. The
+times are fixed, not relative to each night's start: a night that starts
+earlier than 7:30 still gets every stage that falls before it, and past the
+start the verdict is recorded without emailing anybody.
 
 An answer is **in, maybe or out**. A maybe counts toward nothing; it only
-decides who gets the six o'clock last call. Guest names typed onto the sheet
-count toward both thresholds — a body is a body — but nobody can email them,
+decides who gets the 3:30 last call. Guest names typed onto the sheet
+count toward both thresholds, but nobody can email them,
 so a cancellation goes to whoever put them down.
 
 Three rules keep the job honest, all of them in `packages/api/src/jobs/plan.ts`
 and unit-tested there:
 
-- **The opening call is never skipped.** A gym booked at four on a Monday still
-  gets "there is a gym tonight" before anything accuses anybody of silence.
+- **The opening call is never skipped.** A gym booked at one in the afternoon
+  still gets "there is a night tonight" before anything reminds anybody to
+  answer.
 - **One stage per pass, the latest one due.** An overdue stage is abandoned,
   not delivered late.
 - **Ninety minutes between sends, except the verdict.** The one email nobody
-  may miss is "there is no run tonight".
+  may miss is "tonight is off".
 
 Each stage stamps a column on `game` when it is *resolved* — sent **or**
 deliberately skipped — so a stage whose condition was not met is not retried
@@ -215,6 +230,39 @@ Every link in a cycle email lands on `/rsvp/<gameId>?a=<answer>`, which shows
 the answer and waits for a tap. It does not record anything on load: mail
 clients prefetch link targets, which is the same reason the unsubscribe footer
 stopped acting on a GET.
+
+## Design
+
+The look is "Night Court", from a Claude Design handoff: a dark navy ground,
+a hardwood-amber accent, Barlow Condensed 700-800 uppercase for headings,
+numbers and buttons over Barlow for body text, rounded cards, and teal for
+reverse coed. Tokens and helper classes are in
+`packages/ui/src/styles/globals.css`; `CLAUDE.md` lists the ones to use. It is
+built mobile first -- most people open it from an email on a phone -- with a
+bottom tab bar on a phone, a top nav on a desktop and a sidebar for admin.
+Text contrast meets WCAG AA, touch targets are at least 44px, and there is no
+emoji anywhere.
+
+Standing copy (site name, house rules, the "how it works" facts, payment) is
+in `apps/web/src/content/run.ts`.
+
+## What's next
+
+The handoff also specified a volleyball product that this site does not
+have yet. In rough order:
+
+- **Credits instead of gym-money calls.** 1 credit = 1 night = $5. Admins add
+  credits when someone pays (Venmo, cash, other); an immutable ledger of
+  every change; a player's balance is the sum of their entries.
+- **Check-in.** The admin checks people in at the gym and closes the night,
+  which charges one credit per person checked in. No-shows are not charged.
+- **Skill levels**, set by admins (recreational < intermediate < advanced),
+  with nights gated by minimum level **on the server**, for listing and RSVP.
+- **Format and night type** per night: 6 v 6 (cap 18) or 4 v 4 (cap 16),
+  coed or reverse coed, with the reverse-coed rules shown on those nights.
+- **A cap and a cutoff per night**, enforced by the server (today the sheet can
+  go over `CAPACITY`, and the cutoff is the fixed 5:30 PM verdict).
+- **In/out only**, if the group wants to drop "maybe".
 
 ## Database changes
 

@@ -1,29 +1,33 @@
 import type { Rendered } from "../brevo";
-import { baseFacts, type RsvpFacts, render } from "./rsvp";
+import { baseFacts, peopleAre, type RsvpFacts, render } from "./rsvp";
 
 export type RsvpLastCallInput = RsvpFacts & {
 	needed: number;
-	/** We already said it was on, and then people remembered things. */
+	/** The night was confirmed, and then enough people dropped back out. */
 	wasConfirmed: boolean;
 };
 
-/** Stage 04. Six o'clock, still short. The email that converts a maybe. */
+/** Stage 04. Mid-afternoon, still short. The email that resolves a maybe. */
 export function rsvpLastCallEmail(input: RsvpLastCallInput): Rendered {
+	const rule = `At ${input.decideAt} we make the final call: with ${input.playAt} or more in, the night is on; with fewer, it is called off.`;
 	return render({
-		subject: `Last call: ${input.inCount} in, ${input.needed} short by 7:30.`,
+		subject: `Last call for tonight: ${input.inCount} in so far.`,
 		title: "Last call",
 		kicker: "Last call",
-		heading: `${input.needed} more or there is no run.`,
+		heading: "Can you make it tonight?",
 		lead: input.wasConfirmed
-			? `We said it was on. Then some of you remembered a thing. We are back under ${input.confirmAt}, and at 7:30 we count for the last time: ${input.playAt} or more and it happens, fewer and everyone goes to bed.`
-			: `${input.inCount} is not ${input.confirmAt}. At 7:30 we count for the last time: ${input.playAt} or more and it happens, fewer and everyone goes to bed.`,
-		facts: [...baseFacts(input), { label: "Deciding at", value: "7:30 PM" }],
+			? `The night was confirmed, but a few people have since dropped out and ${peopleAre(input.inCount)} in now. ${rule}`
+			: `${peopleAre(input.inCount)} in so far, and ${input.needed} more would confirm the night. ${rule}`,
+		facts: [
+			...baseFacts(input),
+			{ label: "Final call", value: input.decideAt },
+		],
 		notes: input.notes,
-		// No Maybe. This email exists to convert maybes, and handing one back
-		// the button that made the problem is how you get to 7:30 with six ins
-		// and five maybes.
+		// No Maybe. This email exists to resolve maybes, and handing one back
+		// the button that made the problem is how a night reaches the verdict
+		// with six in and five maybes.
 		answers: ["in", "out"],
-		tail: "A maybe counts toward nothing at 7:30. Pick a side.",
+		tail: "A maybe does not count at the final call, so please pick in or out.",
 		facts_: input,
 	});
 }

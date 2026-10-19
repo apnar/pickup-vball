@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import PageTitle from "@/components/page-title";
-import SectionKicker from "@/components/section-kicker";
+import { initials } from "@/components/user-menu";
 import { orpc } from "@/utils/orpc";
 
 export const Route = createFileRoute("/_auth/roster")({
@@ -13,106 +13,87 @@ export const Route = createFileRoute("/_auth/roster")({
 		),
 });
 
-const thClass =
-	"border-divider border-b px-2 py-1.5 text-left font-medium text-[11px] text-ink/60 uppercase tracking-[0.08em]";
-
-const chip = (tone: "steel" | "neutral" | "warn") =>
-	`inline-flex items-center px-2.5 py-[3px] text-[11px] tracking-[0.02em] ${
-		tone === "steel"
-			? "bg-steel-100 text-steel-800"
-			: tone === "warn"
-				? "bg-amber-100 text-amber-900"
-				: "bg-neutral-100 text-neutral-800"
-	}`;
+const pill = "rounded-full px-2 py-px font-semibold text-[12px]";
 
 /**
- * Everybody on the list, ordered by Mondays actually attended. This used to be
- * eight invented names with scouting reports; it is the `user` table now, so
- * the only things it can say about somebody are things the app actually knows.
+ * Everybody in the group, most nights played first. It is the `user` table,
+ * so the only things it can say about somebody are things the app actually
+ * knows.
  */
 function RosterPage() {
 	const { data } = useQuery(orpc.people.roster.queryOptions());
 	const people = data ?? [];
-	const played = people.filter((p) => p.games > 0).length;
 
 	return (
-		<section className="pt-18 pb-15">
+		<section className="pt-8 pb-12 md:pt-10">
 			<PageTitle
-				line1="The regulars."
-				line2="Ranked by attendance, not talent."
+				title="Roster"
+				sub="Everyone in the group, with the most nights played first."
 			/>
-			<p className="mt-7 mb-10 max-w-[60ch] text-base leading-6">
-				Everyone on the list, in order of Mondays turned up for. A game counts
-				when you put your own name in and left it in. Guests belong to nobody,
-				so they count for nobody.
-			</p>
-			<SectionKicker className="mb-5">03 · Personnel file</SectionKicker>
 			{people.length === 0 ? (
-				<p className="text-[15px] text-neutral-700 leading-6">
-					Nobody on the list yet. That includes you, somehow.
+				<p className="panel-outline mt-6 text-ink-soft">
+					No one is on the roster yet.
 				</p>
 			) : (
-				<div className="overflow-x-auto">
-					<table className="w-full min-w-[640px] border-collapse text-sm">
-						<thead>
-							<tr>
-								{["No.", "Name", "Since", "Games", "Last in", "Status"].map(
-									(h) => (
-										<th key={h} className={thClass}>
-											{h}
-										</th>
-									),
-								)}
-							</tr>
-						</thead>
-						<tbody>
-							{people.map((p) => (
-								<tr
-									key={p.id}
-									className={`border-ink/8 border-b hover:bg-ink/4 [&>td]:px-2 [&>td]:py-1.5 ${
-										p.away ? "text-neutral-600" : ""
-									}`}
-								>
-									<td className="kicker tnum text-steel-700">{p.num}</td>
-									<td className="whitespace-nowrap font-heading font-semibold text-xl uppercase tracking-[0.02em]">
+				<ul className="m-0 mt-6 grid list-none grid-cols-[repeat(auto-fill,minmax(min(260px,100%),1fr))] gap-2 p-0">
+					{people.map((p) => (
+						<li
+							key={p.id}
+							className="flex items-center gap-3 rounded-field bg-surface-alt px-3 py-2.5"
+						>
+							<span
+								aria-hidden="true"
+								className={`inline-flex size-9 shrink-0 items-center justify-center rounded-full font-bold text-[13px] ${
+									p.isYou ? "bg-amber text-on-amber" : "bg-raised text-ink"
+								}`}
+							>
+								{initials(p.name)}
+							</span>
+							<span className="flex min-w-0 flex-1 flex-col">
+								<span className="flex min-w-0 items-center gap-1.5">
+									<span className="truncate font-medium text-[15px]">
 										{p.name}
-										{p.isYou ? (
-											<span className="kicker ml-2 align-middle text-steel-700">
-												You
-											</span>
-										) : null}
-									</td>
-									<td className="tnum">{p.since}</td>
-									<td className="tnum">{p.games}</td>
-									<td className="whitespace-nowrap text-neutral-700">
-										{p.lastPlayed ?? "—"}
-									</td>
-									<td>
-										{/* "Regular" only says "not on a break", which Commissioner
-										    already implies. Two chips means somebody who runs the
-										    thing is also sitting one out. */}
-										<span className="flex flex-wrap gap-1.5">
-											{p.isAdmin ? (
-												<span className={chip("steel")}>Commissioner</span>
-											) : null}
-											{p.away ? (
-												<span className={chip("warn")}>On a break</span>
-											) : p.isAdmin ? null : (
-												<span className={chip("neutral")}>Regular</span>
-											)}
+									</span>
+									{p.isYou ? (
+										<span
+											className={`${pill} shrink-0 bg-raised text-ink-soft`}
+										>
+											You
 										</span>
-									</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
-				</div>
+									) : null}
+								</span>
+								<span className="truncate text-[13px] text-subtle">
+									{p.games === 0
+										? `No nights yet · joined ${p.since}`
+										: `${p.games} ${p.games === 1 ? "night" : "nights"}${
+												p.lastPlayed ? ` · last ${p.lastPlayed}` : ""
+											}`}
+								</span>
+							</span>
+							{/* No tag for an ordinary active player: that is the default,
+							    and a grid of identical tags says nothing. Two tags means
+							    somebody who runs the group is also sitting some out. */}
+							{p.isAdmin || p.away ? (
+								<span className="flex shrink-0 flex-col items-end gap-1">
+									{p.isAdmin ? (
+										<span className={`${pill} bg-raised text-ink-soft`}>
+											Admin
+										</span>
+									) : null}
+									{p.away ? (
+										<span className={`${pill} bg-warn-bg text-warn`}>
+											On a break
+										</span>
+									) : null}
+								</span>
+							) : null}
+						</li>
+					))}
+				</ul>
 			)}
-			<p className="mt-4 text-[13px] text-neutral-700 leading-6">
-				{played === 0
-					? "Nobody has a Monday on the board yet. The first game fixes that."
-					: "Want a higher number? There is one way, and it is on Mondays."}{" "}
-				Getting on the list at all is Sean's call. Don't ask about the hip.
+			<p className="mt-4 max-w-[60ch] text-[14px] text-subtle">
+				A night counts when you RSVP yourself in and stay in. Guests aren’t
+				counted toward anyone. To bring someone new into the group, ask Viroj.
 			</p>
 		</section>
 	);

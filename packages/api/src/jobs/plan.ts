@@ -1,7 +1,7 @@
 /**
  * What the cycle should do about one game, right now. Pure: no database, no
  * mailer, no clock of its own -- which is the only reason the whole schedule
- * can be tested without standing up D1 and waiting until Monday.
+ * can be tested without standing up D1 and waiting for a real night.
  */
 
 import { CLOCK_STAGES, STAGE_COOLDOWN_MINUTES, type StageKey } from "../cycle";
@@ -43,7 +43,7 @@ export type PlanInput = {
 /**
  * The rules, in order of who wins:
  *
- * R0  Past tip-off, nothing is emailed -- a cancellation at 9:05 reaches
+ * R0  Past the start, nothing is emailed -- a cancellation at 7:35 reaches
  *     people already in the parking lot -- but the verdict is still recorded,
  *     so a dropped cron pass cannot leave a game undecided forever.
  *
@@ -75,9 +75,9 @@ export function planStage(input: PlanInput): Plan {
 					skip: stale,
 					run: "final",
 					silent: true,
-					reason: "Past tip-off: recording the verdict, emailing nobody.",
+					reason: "Past the start: recording the verdict, emailing nobody.",
 				}
-			: { skip: stale, run: null, silent: false, reason: "Past tip-off." };
+			: { skip: stale, run: null, silent: false, reason: "Past the start." };
 	}
 
 	const due = CLOCK_STAGES.filter(

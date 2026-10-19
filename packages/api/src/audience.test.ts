@@ -11,51 +11,51 @@ const row = (over: Partial<SheetRow> & { name: string }): SheetRow => ({
 });
 
 const active: Person[] = [
-	{ id: "u-sean", name: "Sean" },
-	{ id: "u-dana", name: "Dana" },
-	{ id: "u-ray", name: "Ray" },
-	{ id: "u-dev", name: "Dev" },
+	{ id: "u-ana", name: "Ana" },
+	{ id: "u-beth", name: "Beth" },
+	{ id: "u-chris", name: "Chris" },
+	{ id: "u-omar", name: "Omar" },
 ];
 
 describe("splitAudience", () => {
 	it("counts guests toward the totals but never mails them", () => {
 		const split = splitAudience(
 			[
-				row({ name: "Sean", userId: "u-sean" }),
-				row({ name: "Marcus", addedBy: "u-sean" }),
-				row({ name: "Dana", userId: "u-dana", response: "maybe" }),
+				row({ name: "Ana", userId: "u-ana" }),
+				row({ name: "Marcus", addedBy: "u-ana" }),
+				row({ name: "Beth", userId: "u-beth", response: "maybe" }),
 			],
 			active,
 		);
 		expect(split.yes).toBe(2);
-		expect(split.inNames).toEqual(["Sean", "Marcus"]);
+		expect(split.inNames).toEqual(["Ana", "Marcus"]);
 		// Marcus has no inbox, so he is not in the id set the mailer filters on.
-		expect(split.inIds).toEqual(["u-sean"]);
-		expect(split.maybeIds).toEqual(["u-dana"]);
-		// Whoever put Marcus down can pass word along if the run is called off.
-		expect(split.sponsorIds).toEqual(["u-sean"]);
+		expect(split.inIds).toEqual(["u-ana"]);
+		expect(split.maybeIds).toEqual(["u-beth"]);
+		// Whoever put Marcus down can pass word along if the night is called off.
+		expect(split.sponsorIds).toEqual(["u-ana"]);
 	});
 
 	it("does not accuse somebody of silence when a guest row has their name", () => {
 		const split = splitAudience(
-			[row({ name: "Sean", userId: "u-sean" }), row({ name: "dana " })],
+			[row({ name: "Ana", userId: "u-ana" }), row({ name: "beth " })],
 			active,
 		);
-		// Dana's row is a guest row -- no user_id -- but her name is on the
-		// sheet, so the 2 PM prod leaves her alone.
-		expect(split.silentNames).toEqual(["Ray", "Dev"]);
-		expect(split.silentIds).toEqual(["u-ray", "u-dev"]);
+		// Beth's row is a guest row -- no user_id -- but her name is on the
+		// sheet, so the noon reminder leaves her alone.
+		expect(split.silentNames).toEqual(["Chris", "Omar"]);
+		expect(split.silentIds).toEqual(["u-chris", "u-omar"]);
 	});
 
 	it("counts an out as answered, not silent", () => {
 		const split = splitAudience(
-			[row({ name: "Ray", userId: "u-ray", response: "out" })],
+			[row({ name: "Chris", userId: "u-chris", response: "out" })],
 			active,
 		);
 		expect(split.out).toBe(1);
 		expect(split.yes).toBe(0);
 		expect(split.silent).toBe(3);
-		expect(split.silentIds).not.toContain("u-ray");
+		expect(split.silentIds).not.toContain("u-chris");
 	});
 
 	it("has nobody silent when the sheet is empty of nobody", () => {
@@ -89,7 +89,7 @@ describe("guestSuggestions", () => {
 		).toEqual(["Marcus"]);
 	});
 
-	it("does not offer somebody already on tonight's sheet", () => {
+	it("does not offer somebody already on this night's sheet", () => {
 		expect(guestSuggestions(past("Marcus", "Tone"), ["marcus"], 6)).toEqual([
 			"Tone",
 		]);

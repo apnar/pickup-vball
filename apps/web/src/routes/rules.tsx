@@ -1,8 +1,6 @@
-import { Blueprint } from "@pickup-vball/ui/components/blueprint";
 import { createFileRoute } from "@tanstack/react-router";
 
 import PageTitle from "@/components/page-title";
-import SectionKicker from "@/components/section-kicker";
 import { rules } from "@/content/run";
 
 export const Route = createFileRoute("/rules")({
@@ -11,32 +9,29 @@ export const Route = createFileRoute("/rules")({
 
 function RulesPage() {
 	return (
-		<section className="pt-18 pb-15">
+		<section className="pt-8 pb-12 md:pt-10">
 			<PageTitle
-				line1="House rules."
-				line2="Argue with them at your own risk."
+				title="House rules"
+				sub="A few things that keep every night safe and fun for everyone."
 			/>
-			<p className="mt-7 mb-10 max-w-[60ch] text-base leading-6">
-				Ratified by whoever was still there at 9:30 one night in 2019.
-				Amendments require a made free throw, which is why there have only ever
-				been two. They went in at the top, where they belong.
-			</p>
-			<SectionKicker>04 · Code of conduct</SectionKicker>
-			<div className="grid grid-cols-1 gap-[clamp(24px,3vw,48px)] p-2 md:grid-cols-3">
+			{/* A real ordered list, so the numbering is read out once; the drawn
+			    number is for the eye only. */}
+			<ol className="m-0 mt-8 grid list-none grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-4 p-0">
 				{rules.map((rule, i) => (
-					<Blueprint key={rule.title} className="p-6">
-						<span className="kicker tnum mb-3 block text-steel-700">
+					<li key={rule.title} className="panel flex flex-col gap-3">
+						<span
+							aria-hidden="true"
+							className="display tnum text-[40px] text-amber leading-none"
+						>
 							{String(i + 1).padStart(2, "0")}
 						</span>
-						<h2 className="font-heading text-[22px] uppercase leading-6 tracking-[0.02em]">
+						<h2 className="m-0 font-bold font-heading text-[22px] uppercase leading-tight tracking-[0.04em]">
 							{rule.title}
 						</h2>
-						<p className="mt-3 text-[15px] text-neutral-700 leading-6">
-							{rule.body}
-						</p>
-					</Blueprint>
+						<p className="m-0 text-ink-soft">{rule.body}</p>
+					</li>
 				))}
-			</div>
+			</ol>
 		</section>
 	);
 }

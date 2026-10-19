@@ -79,8 +79,8 @@ export function renderStage(input: {
 					permitUrl: input.permitUrl,
 				}),
 				// A cancellation goes wider than anything else in the cycle:
-				// the guy who ignored every email is the one who drives to a
-				// locked gym out of habit, and a guest has no inbox at all.
+				// someone who missed every email is the one most likely to drive
+				// to a locked gym out of habit, and a guest has no inbox at all.
 				audience: on
 					? union(split.inIds, split.maybeIds)
 					: union(

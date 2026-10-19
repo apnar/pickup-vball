@@ -22,10 +22,10 @@ export const brevoWebhook = new Hono();
 
 /** Payload `event` values that mean "stop emailing this address", and why. */
 const DROP_EVENTS = new Map([
-	["unsubscribed", "Unsubscribed from their mail app."],
-	["hard_bounce", "Email is bouncing."],
-	["spam", "Marked us as spam."],
-	["invalid_email", "Address is not valid."],
+	["unsubscribed", "Unsubscribed using their mail app."],
+	["hard_bounce", "Emails to this address are bouncing."],
+	["spam", "Marked one of our emails as spam."],
+	["invalid_email", "The email address is not valid."],
 ]);
 
 type BrevoEvent = { event?: string; email?: string; reason?: string };
@@ -60,7 +60,7 @@ brevoWebhook.post("/", async (c) => {
 	try {
 		payload = await c.req.json();
 	} catch {
-		return c.text("Bad JSON.", 400);
+		return c.text("Invalid JSON.", 400);
 	}
 	const events = (Array.isArray(payload) ? payload : [payload]).filter(
 		(e): e is BrevoEvent => typeof e === "object" && e !== null,

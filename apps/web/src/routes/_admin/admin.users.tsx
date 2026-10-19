@@ -2,16 +2,18 @@ import {
 	RESPONSE_WINDOW,
 	type ResponseRate,
 } from "@pickup-vball/api/responses";
-import { Blueprint } from "@pickup-vball/ui/components/blueprint";
 import { Button } from "@pickup-vball/ui/components/button";
 import { Input } from "@pickup-vball/ui/components/input";
 import { Label } from "@pickup-vball/ui/components/label";
+import { Panel } from "@pickup-vball/ui/components/panel";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { BreakForm, describeBreak } from "@/components/break-form";
+import PageTitle from "@/components/page-title";
+import SectionKicker from "@/components/section-kicker";
 import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/utils/orpc";
 
@@ -20,22 +22,25 @@ export const Route = createFileRoute("/_admin/admin/users")({
 });
 
 const thClass =
-	"border-divider border-b px-2 py-1.5 text-left font-medium text-[11px] text-ink/60 uppercase tracking-[0.08em]";
+	"px-4 py-3.5 text-left font-semibold text-[13px] text-subtle uppercase tracking-[0.08em]";
 
-const chip = (tone: "steel" | "neutral" | "warn" | "gone") =>
-	`inline-flex items-center px-2.5 py-[3px] text-[11px] tracking-[0.02em] ${
-		tone === "steel"
-			? "bg-steel-100 text-steel-800"
+const pill = (tone: "ok" | "warn" | "danger" | "neutral" | "accent") =>
+	`inline-flex items-center rounded-full px-2.5 py-0.5 font-semibold text-[13px] ${
+		tone === "ok"
+			? "bg-ok-bg text-ok"
 			: tone === "warn"
-				? "bg-amber-100 text-amber-900"
-				: tone === "gone"
-					? "bg-neutral-200 text-neutral-700"
-					: "bg-neutral-100 text-neutral-800"
+				? "bg-warn-bg text-warn"
+				: tone === "danger"
+					? "bg-danger-bg text-danger"
+					: tone === "accent"
+						? "bg-raised text-amber"
+						: "bg-raised text-ink-soft"
 	}`;
 
 function when(value: Date | string | null | undefined): string {
 	if (!value) return "";
 	return new Date(value).toLocaleString("en-US", {
+		timeZone: "America/New_York",
 		month: "short",
 		day: "numeric",
 		hour: "numeric",
@@ -44,33 +49,33 @@ function when(value: Date | string | null | undefined): string {
 }
 
 /**
- * How somebody has answered the last few calls to play, in the width of a
+ * How somebody has answered the last few invitations, in the width of a
  * table cell. Three counts over one denominator rather than three fractions:
- * the numbers are all out of the same handful of runs, and repeating "/ 8"
+ * the numbers are all out of the same handful of nights, and repeating "/ 8"
  * three times reads like three different measurements.
  *
- * `of` is how many of those runs this person was on the roster for, so a man
- * added last week reads "of 1" and is not quietly accused of ignoring nine
- * emails that were sent before he existed.
+ * `of` is how many of those nights this person was on the roster for, so
+ * somebody added last week reads "of 1" and is not quietly accused of
+ * ignoring nine emails that were sent before they joined.
  */
 function Record({ rate }: { rate: ResponseRate }) {
 	if (rate.of === 0) {
-		return <span className="text-neutral-500">Not asked yet</span>;
+		return <span className="text-subtle">Not asked yet</span>;
 	}
 	return (
 		<span className="tnum">
 			<strong className="font-semibold text-ink">{rate.yes}</strong> in ·{" "}
 			{rate.replied} replied
 			{rate.onBreak > 0 ? ` · ${rate.onBreak} away` : ""} ·{" "}
-			<span className="text-neutral-500">of {rate.of}</span>
+			<span className="text-subtle">of {rate.of}</span>
 		</span>
 	);
 }
 
 /**
- * Everybody, in one table. Before this page and the Email tab listed two
- * different tables of people and never mentioned each other; there is only
- * one list now, and this is it.
+ * Everybody, in one table. The roster, the mailing list and the accounts are
+ * the same rows, so there is one page for them rather than two that never
+ * mention each other.
  */
 function AdminPeoplePage() {
 	const queryClient = useQueryClient();
@@ -99,8 +104,8 @@ function AdminPeoplePage() {
 			onSuccess: (result) => {
 				toast.success(
 					result.emailed
-						? `Added, and their link is ${result.dryRun ? "in the server log" : "on its way"}.`
-						: "Added. The welcome email did not go out.",
+						? `Added. Their sign-in link is ${result.dryRun ? "in the server log" : "on its way"}.`
+						: "Added, but the welcome email didn't go out.",
 				);
 				setNewEmail("");
 				setNewName("");
@@ -125,8 +130,8 @@ function AdminPeoplePage() {
 			onSuccess: (result) => {
 				toast.success(
 					result.dryRun
-						? "Old links are dead. New one printed to the server log."
-						: "Old links are dead. New one sent.",
+						? "Old links no longer work. The new one is in the server log."
+						: "Old links no longer work. A new one is on its way.",
 				);
 				refresh();
 			},
@@ -136,7 +141,7 @@ function AdminPeoplePage() {
 	const suspend = useMutation(
 		orpc.people.suspend.mutationOptions({
 			onSuccess: () => {
-				toast.success("Spot held.");
+				toast.success("Break started.");
 				refresh();
 			},
 			onError,
@@ -145,7 +150,7 @@ function AdminPeoplePage() {
 	const unsuspend = useMutation(
 		orpc.people.unsuspend.mutationOptions({
 			onSuccess: () => {
-				toast.success("Back on.");
+				toast.success("Break ended.");
 				refresh();
 			},
 			onError,
@@ -154,7 +159,7 @@ function AdminPeoplePage() {
 	const deactivate = useMutation(
 		orpc.people.deactivate.mutationOptions({
 			onSuccess: () => {
-				toast.success("Deactivated. Sessions revoked.");
+				toast.success("Deactivated and signed out everywhere.");
 				refresh();
 			},
 			onError,
@@ -163,15 +168,15 @@ function AdminPeoplePage() {
 	const reactivate = useMutation(
 		orpc.people.reactivate.mutationOptions({
 			onSuccess: () => {
-				toast.success("Back in. Send them their link.");
+				toast.success("Reactivated. Send them a link so they can sign in.");
 				refresh();
 			},
 			onError,
 		}),
 	);
 	/**
-	 * One person swears nothing arrived. Re-send them the stage that has most
-	 * recently gone out for the next game -- targeted, so it never touches the
+	 * One person says nothing arrived. Re-send them the stage that has most
+	 * recently gone out for the next night -- targeted, so it never touches the
 	 * cycle's own record of what is finished.
 	 */
 	const resendCycle = useMutation(
@@ -187,13 +192,15 @@ function AdminPeoplePage() {
 			return result.data;
 		},
 		onSuccess: (_data, input) => {
-			toast.success(input.role === "admin" ? "Promoted." : "Demoted.");
+			toast.success(
+				input.role === "admin" ? "Now an admin." : "No longer an admin.",
+			);
 			refresh();
 		},
 		onError,
 	});
 
-	// The next game whose cycle has actually started, and the last stage of it
+	// The next night whose cycle has actually started, and the last stage of it
 	// that resolved -- that is the email this person is missing.
 	const nextGame = (games.data?.upcoming ?? []).find((g) => g.callAt);
 	const lastStage = nextGame
@@ -221,61 +228,68 @@ function AdminPeoplePage() {
 	);
 
 	return (
-		<div className="space-y-10">
-			<div>
-				<span className="kicker mb-3 block text-steel-700">People</span>
-				<p className="mb-6 max-w-[64ch] text-[15px] text-neutral-700 leading-6">
-					One list. Everybody here gets the game emails and can take a spot;
-					their link is how they get in. Somebody hurt or travelling{" "}
-					<strong>takes a break</strong> — no email, no spot, but their account
-					and their link keep working, and they come back on their own.{" "}
-					<strong>Deactivating</strong> is the other thing: it revokes access,
-					signs them out everywhere and takes them off every email. Only an
-					admin can do that, or undo it.
+		<div className="flex flex-col gap-8">
+			<PageTitle
+				title="Players"
+				sub="Everyone in the group: who gets the emails, who is taking a break, and how they sign in."
+			/>
+
+			<div className="flex max-w-[68ch] flex-col gap-3 text-ink-soft">
+				<p className="m-0">
+					Everyone here gets the emails about upcoming nights and can RSVP; the
+					link in those emails is how they sign in. Someone injured or
+					travelling can <strong className="text-ink">take a break</strong>: no
+					emails and no spot until they're back, but their account and link keep
+					working, and they can come back on their own.{" "}
+					<strong className="text-ink">Deactivating</strong> is different: it
+					removes access, signs them out everywhere and stops all email. Only an
+					admin can deactivate someone or undo it.
 				</p>
-				<p className="mb-6 max-w-[64ch] text-[15px] text-neutral-700 leading-6">
-					<strong>Last {RESPONSE_WINDOW}</strong> is how each of them has
-					answered the last {RESPONSE_WINDOW} calls to play: how many they said
-					in to, how many they answered at all — out is an answer — and how many
-					they were away for. All three are out of the number after <em>of</em>,
-					which is how many of those calls they were on the list for: somebody
-					who joined last month has a shorter record, not a worse one. Runs from
-					before we started writing this down are not in it.
+				<p className="m-0">
+					<strong className="text-ink">Last {RESPONSE_WINDOW}</strong> shows how
+					each person answered the last {RESPONSE_WINDOW} invitations: how many
+					times they said yes, how many times they replied at all (a no counts
+					as a reply), and how many they were away for. All three are out of the
+					number after <em>of</em>, which is how many of those invitations they
+					were on the list for, so someone who joined recently has a shorter
+					record, not a worse one. Nights from before this was tracked aren't
+					counted.
 				</p>
-				<Blueprint className="p-5">
-					<span className="kicker mb-3 block text-steel-700">Add someone</span>
-					<form
-						className="flex flex-wrap items-end gap-3"
-						onSubmit={(e) => {
-							e.preventDefault();
-							add.mutate({ email: newEmail, name: newName || undefined });
-						}}
-					>
-						<div className="min-w-[220px] flex-1 space-y-1.5">
-							<Label htmlFor="new-email">Email</Label>
-							<Input
-								id="new-email"
-								type="email"
-								required
-								value={newEmail}
-								onChange={(e) => setNewEmail(e.target.value)}
-							/>
-						</div>
-						<div className="min-w-[160px] space-y-1.5">
-							<Label htmlFor="new-name">Name</Label>
-							<Input
-								id="new-name"
-								maxLength={40}
-								value={newName}
-								onChange={(e) => setNewName(e.target.value)}
-							/>
-						</div>
-						<Button type="submit" size="sm" disabled={add.isPending}>
-							Add and send their link
-						</Button>
-					</form>
-				</Blueprint>
 			</div>
+
+			<Panel className="flex flex-col gap-3.5">
+				<SectionKicker className="m-0">Add a player</SectionKicker>
+				<form
+					className="flex flex-wrap items-end gap-4"
+					onSubmit={(e) => {
+						e.preventDefault();
+						add.mutate({ email: newEmail, name: newName || undefined });
+					}}
+				>
+					<div className="flex min-w-[220px] flex-1 flex-col gap-1.5">
+						<Label htmlFor="new-email">Email</Label>
+						<Input
+							id="new-email"
+							type="email"
+							required
+							value={newEmail}
+							onChange={(e) => setNewEmail(e.target.value)}
+						/>
+					</div>
+					<div className="flex min-w-[180px] flex-col gap-1.5">
+						<Label htmlFor="new-name">Name</Label>
+						<Input
+							id="new-name"
+							maxLength={40}
+							value={newName}
+							onChange={(e) => setNewName(e.target.value)}
+						/>
+					</div>
+					<Button type="submit" disabled={add.isPending}>
+						Add and send link
+					</Button>
+				</form>
+			</Panel>
 
 			{/*
 			 * The table has to fit the page at desktop widths: an overflow wrapper
@@ -284,23 +298,28 @@ function AdminPeoplePage() {
 			 * breaks anywhere, and the actions wrap to a second line. The wrapper
 			 * stays only for a phone, where six columns cannot fit whatever they do.
 			 */}
-			<div className="overflow-x-auto">
-				<table className="w-full min-w-[560px] border-collapse text-sm">
+			<div className="overflow-x-auto rounded-card bg-surface">
+				<table className="w-full min-w-[820px] border-collapse text-[15px]">
 					<thead>
 						<tr>
-							{[
-								"Name",
-								"Email",
-								"Role",
-								"Status",
-								`Last ${RESPONSE_WINDOW}`,
-								"Link sent",
-								"",
-							].map((h, i) => (
-								<th key={h || `col-${i}`} className={thClass}>
-									{h}
-								</th>
-							))}
+							<th scope="col" className={thClass}>
+								Player
+							</th>
+							<th scope="col" className={thClass}>
+								Role
+							</th>
+							<th scope="col" className={thClass}>
+								Status
+							</th>
+							<th scope="col" className={thClass}>
+								Last {RESPONSE_WINDOW}
+							</th>
+							<th scope="col" className={thClass}>
+								Link sent
+							</th>
+							<th scope="col" className={thClass}>
+								<span className="sr-only">Actions</span>
+							</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -313,47 +332,53 @@ function AdminPeoplePage() {
 							return (
 								<tr
 									key={p.id}
-									className={`border-ink/8 border-b [&>td]:px-2 [&>td]:py-2 ${gone ? "text-neutral-500" : ""}`}
+									className={`border-raised border-t align-top hover:bg-raised-hover [&>td]:px-4 [&>td]:py-3 ${gone ? "text-subtle" : ""}`}
 								>
-									<td className="font-heading font-semibold text-lg uppercase leading-tight tracking-[0.02em]">
-										{p.name}
+									<td className="min-w-[200px]">
+										<span
+											className={`block font-semibold ${gone ? "text-subtle" : "text-ink"}`}
+										>
+											{p.name}
+										</span>
+										<span className="wrap-anywhere block text-[14px] text-subtle">
+											{p.email}
+										</span>
 									</td>
-									<td className="wrap-anywhere">{p.email}</td>
 									<td>
-										<span className={chip(admin ? "steel" : "neutral")}>
+										<span className={pill(admin ? "accent" : "neutral")}>
 											{admin ? "Admin" : "Player"}
 										</span>
 									</td>
-									<td className="text-[13px]">
+									<td>
 										{gone ? (
-											<span className={chip("gone")}>
+											<span className={pill("danger")}>
 												Deactivated
 												{p.statusReason ? ` — ${p.statusReason}` : ""}
 											</span>
 										) : away ? (
-											<span className={chip("warn")}>
+											<span className={pill("warn")}>
 												{describeBreak({
 													suspendedUntil: p.suspendedUntil,
 													reason: p.statusReason,
 												})}
 											</span>
 										) : (
-											<span className={chip("steel")}>Active</span>
+											<span className={pill("ok")}>Active</span>
 										)}
 										{p.statusChangedBy === "mail" ? (
-											<span className="ml-2 text-[12px] text-neutral-600">
-												via mail app
+											<span className="mt-1 block text-[13px] text-subtle">
+												Via their email app
 											</span>
 										) : null}
 									</td>
-									<td className="text-[12px] text-neutral-700 leading-4">
+									<td className="text-[14px] text-subtle">
 										<Record rate={p.responses} />
 									</td>
-									<td className="whitespace-nowrap text-[13px] text-neutral-700">
+									<td className="whitespace-nowrap text-[14px] text-subtle">
 										{p.linkSentAt ? when(p.linkSentAt) : "Never sent"}
 									</td>
-									<td className="text-right">
-										<div className="flex flex-wrap justify-end gap-x-1 gap-y-1">
+									<td className="min-w-[230px] text-right">
+										<div className="flex flex-wrap justify-end gap-1">
 											{gone ? (
 												<Button
 													variant="ghost"
@@ -377,7 +402,7 @@ function AdminPeoplePage() {
 														variant="ghost"
 														size="xs"
 														disabled={rotateLink.isPending}
-														title="Kills every link they were ever emailed and sends a fresh one. For a forwarded email."
+														title="Cancels every link they've been sent and emails a new one. Use it if one of their emails was forwarded."
 														onClick={() => rotateLink.mutate({ userId: p.id })}
 													>
 														New link
@@ -389,7 +414,7 @@ function AdminPeoplePage() {
 															disabled={busy}
 															onClick={() => unsuspend.mutate({ userId: p.id })}
 														>
-															They're back
+															End break
 														</Button>
 													) : (
 														<Button
@@ -399,7 +424,7 @@ function AdminPeoplePage() {
 																setPausing(pausing === p.id ? null : p.id)
 															}
 														>
-															{pausing === p.id ? "Never mind" : "Break..."}
+															{pausing === p.id ? "Cancel break" : "Break…"}
 														</Button>
 													)}
 													{nextGame && lastStage && !away ? (
@@ -443,7 +468,7 @@ function AdminPeoplePage() {
 															)
 														}
 													>
-														Deactivate...
+														Deactivate…
 													</Button>
 												</>
 											)}
@@ -455,39 +480,40 @@ function AdminPeoplePage() {
 					</tbody>
 				</table>
 				{rows.length === 0 ? (
-					<p className="mt-3 text-[15px] text-neutral-700 leading-6">
-						Nobody yet. Add the regulars; each one gets their link by email.
+					<p className="m-0 border-raised border-t px-4 py-4 text-subtle">
+						No players yet. Add someone above and they'll get a sign-in link by
+						email.
 					</p>
 				) : null}
 			</div>
 
 			{pausing ? (
-				<Blueprint className="p-5">
-					<span className="kicker mb-3 block text-steel-700">
+				<Panel className="flex flex-col gap-3.5">
+					<SectionKicker className="m-0">
 						Break for {rows.find((p) => p.id === pausing)?.name}
-					</span>
+					</SectionKicker>
 					<BreakForm
 						subject={rows.find((p) => p.id === pausing)?.name ?? "they"}
 						pending={suspend.isPending}
 						onCancel={() => setPausing(null)}
 						onSubmit={(input) => suspend.mutate({ ...input, userId: pausing })}
 					/>
-				</Blueprint>
+				</Panel>
 			) : null}
 
 			{confirmKey?.startsWith("kill:") ? (
-				<Blueprint className="border-red-300 p-5">
-					<span className="kicker mb-3 block text-red-800">
+				<div className="flex flex-col gap-3.5 rounded-card border-[1.5px] border-danger-bg bg-danger-tile p-[18px] md:p-5">
+					<SectionKicker className="m-0 text-danger">
 						Deactivate {rows.find((p) => `kill:${p.id}` === confirmKey)?.name}
-					</span>
-					<p className="mb-4 max-w-[56ch] text-[13px] text-neutral-700 leading-5">
-						This revokes their access, signs them out of every device, and takes
-						them off every email including "everyone" sends. Their old sign-in
-						links stop working. Nothing is deleted, and an admin can undo it —
-						but if they are only hurt, a break is what you want.
+					</SectionKicker>
+					<p className="m-0 max-w-[60ch] text-ink-soft">
+						This removes their access, signs them out on every device, and stops
+						all email to them, including messages sent to everyone. Their old
+						sign-in links stop working. Nothing is deleted, and an admin can
+						undo it. If they only need time off, a break is the better choice.
 					</p>
 					<form
-						className="flex flex-wrap items-end gap-3"
+						className="flex flex-wrap items-end gap-4"
 						onSubmit={(e) => {
 							e.preventDefault();
 							deactivate.mutate({
@@ -496,37 +522,37 @@ function AdminPeoplePage() {
 							});
 						}}
 					>
-						<div className="min-w-[260px] flex-1 space-y-1.5">
-							<Label htmlFor="kill-reason">Why (optional)</Label>
+						<div className="flex min-w-[260px] flex-1 flex-col gap-1.5">
+							<Label htmlFor="kill-reason">Reason (optional)</Label>
 							<Input
 								id="kill-reason"
 								maxLength={200}
-								placeholder="Moved to Denver"
+								placeholder="Moved away"
 								value={reason}
 								onChange={(e) => setReason(e.target.value)}
 							/>
 						</div>
-						<Button
-							type="submit"
-							variant="destructive"
-							size="sm"
-							disabled={deactivate.isPending}
-						>
-							Really deactivate
-						</Button>
-						<Button
-							type="button"
-							variant="ghost"
-							size="sm"
-							onClick={() => {
-								setConfirmKey(null);
-								setReason("");
-							}}
-						>
-							Cancel
-						</Button>
+						<div className="flex flex-wrap gap-2">
+							<Button
+								type="submit"
+								variant="destructive"
+								disabled={deactivate.isPending}
+							>
+								Deactivate
+							</Button>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => {
+									setConfirmKey(null);
+									setReason("");
+								}}
+							>
+								Cancel
+							</Button>
+						</div>
 					</form>
-				</Blueprint>
+				</div>
 			) : null}
 		</div>
 	);

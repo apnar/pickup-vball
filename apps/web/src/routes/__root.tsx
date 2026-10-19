@@ -10,11 +10,11 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
-import { SITE_NAME } from "@/content/run";
+import { SITE_AREA, SITE_NAME } from "@/content/run";
 import { getUser } from "@/functions/get-user";
 import type { orpc } from "@/utils/orpc";
 
-import Header from "../components/header";
+import Header, { TabBar } from "../components/header";
 
 import appCss from "../index.css?url";
 export interface RouterAppContext {
@@ -38,15 +38,16 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 			},
 			{
 				name: "viewport",
-				content: "width=device-width, initial-scale=1",
+				content: "width=device-width, initial-scale=1, viewport-fit=cover",
 			},
+			{ name: "theme-color", content: "#0A111D" },
 			{
 				title: SITE_NAME,
 			},
 			{
 				name: "description",
 				content:
-					"A weekly full-court run in Montgomery County. Show up or get talked about.",
+					"Invite-only pickup volleyball in Montgomery County, MD. RSVP for this week's nights.",
 			},
 		],
 		links: [
@@ -54,9 +55,9 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 				rel: "stylesheet",
 				href: appCss,
 			},
-			// The sheet in steel with its registration marks and one condensed M.
-			// SVG for browsers that take it, the .ico for the ones that do not
-			// (Safari among them), and the 180px PNG for a home screen.
+			// An amber ball on navy. SVG for browsers that take it, the .ico for
+			// the ones that do not (Safari among them), and the 180px PNG for a
+			// home screen.
 			{ rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
 			{ rel: "icon", href: "/favicon.ico", sizes: "16x16 32x32 48x48" },
 			{ rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
@@ -77,28 +78,26 @@ function RootDocument() {
 			<body>
 				<div className="flex min-h-svh flex-col">
 					<Header />
-					<div className="mx-auto w-full max-w-[1100px] flex-1 px-[clamp(20px,5vw,72px)]">
+					<div className="mx-auto w-full max-w-[1200px] flex-1 px-5 md:px-[clamp(16px,4vw,40px)]">
 						<main>
 							<Outlet />
 						</main>
-						<footer className="flex flex-wrap justify-between gap-2 border-divider border-t py-12 text-[13px] text-neutral-700 leading-6">
-							<span>{SITE_NAME} · est. whenever Sean says</span>
-							{session ? (
-								<span>
-									Rain, snow, or Sean's hip: the verdict is in your inbox by
-									7:30.
-								</span>
-							) : (
-								<span>
-									Already on the list?{" "}
-									<Link to="/login" className="text-steel-700">
-										Sign in
-									</Link>
-									.
-								</span>
-							)}
-						</footer>
 					</div>
+					<footer className="mx-auto flex w-full max-w-[1200px] flex-wrap justify-between gap-2 px-5 pt-10 pb-8 text-[13px] text-subtle leading-6 md:px-[clamp(16px,4vw,40px)]">
+						<span>
+							{SITE_NAME} · {SITE_AREA}
+						</span>
+						{session ? (
+							<Link to="/rules" className="md:hidden">
+								House rules
+							</Link>
+						) : (
+							<span>
+								Already in the group? <Link to="/login">Sign in</Link>.
+							</span>
+						)}
+					</footer>
+					<TabBar />
 				</div>
 				<Toaster richColors />
 				<TanStackRouterDevtools position="bottom-left" />

@@ -1,8 +1,8 @@
 /**
  * The two gym-money emails. They are the same email twice -- an amount, how
- * to get it to Sean, and a link back to the row that says whether you have --
- * differing only in who is reading it and how patient it sounds, so the parts
- * they share live here rather than in both files.
+ * to pay it, and a link back to the row that says whether you have --
+ * differing only in who is reading it, so the parts they share live here
+ * rather than in both files.
  */
 
 import type { Rendered } from "../brevo";
@@ -21,7 +21,7 @@ import {
 export type ContributionFacts = {
 	/** Whole dollars, the same number for everybody on the list. */
 	amount: number;
-	/** One line of the admin's own words: "Venmo @sean, or cash at the door". */
+	/** One line of the admin's own words: "Venmo @Viroj7, or cash at the gym". */
 	instructions: string;
 	siteUrl: string;
 };
@@ -37,7 +37,7 @@ export function dollars(amount: number): string {
 	return `$${whole.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
 }
 
-const CTA = "See where you stand";
+const CTA = "See your status";
 
 /**
  * Both emails land on `/dashboard`: it shows the reader their own row and

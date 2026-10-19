@@ -6,8 +6,6 @@ import {
 	redirect,
 } from "@tanstack/react-router";
 
-import PageTitle from "@/components/page-title";
-
 export const Route = createFileRoute("/_admin")({
 	beforeLoad: ({ context, location }) => {
 		if (!context.session) {
@@ -22,40 +20,48 @@ export const Route = createFileRoute("/_admin")({
 });
 
 const tabClass =
-	"kicker border-b-2 border-transparent pb-2 text-ink no-underline hover:text-steel-700 aria-[current=page]:border-steel aria-[current=page]:text-steel-700";
+	"flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-field px-3 font-semibold text-subtle no-underline hover:bg-raised-hover hover:text-ink aria-[current=page]:bg-surface aria-[current=page]:text-ink";
 
+const TABS = [
+	{ to: "/admin", label: "Nights", exact: true },
+	{ to: "/admin/gyms", label: "Gyms" },
+	{ to: "/admin/permits", label: "Permits" },
+	{ to: "/admin/users", label: "Players" },
+	{ to: "/admin/email", label: "Email" },
+	{ to: "/admin/contributions", label: "Gym money" },
+	{ to: "/admin/cycle", label: "RSVP emails" },
+] as const;
+
+/**
+ * A sidebar on a desktop, where admin work mostly happens, and a row of
+ * scrolling tabs on a phone, where it has to fit above the content.
+ */
 function AdminLayout() {
 	return (
-		<section className="pt-18 pb-15">
-			<PageTitle line1="Front office." line2="Book the gym. File the permit." />
-			<p className="mt-7 mb-10 max-w-[60ch] text-base leading-6">
-				Games only exist once a court is rented. Add the gym once, put the date
-				in, attach the permit, and the headcount opens on the home page.
-			</p>
-			<nav className="mb-8 flex gap-6 border-divider border-b">
-				<Link to="/admin" activeOptions={{ exact: true }} className={tabClass}>
-					Games
-				</Link>
-				<Link to="/admin/gyms" className={tabClass}>
-					Gyms
-				</Link>
-				<Link to="/admin/permits" className={tabClass}>
-					Permits
-				</Link>
-				<Link to="/admin/users" className={tabClass}>
-					Users
-				</Link>
-				<Link to="/admin/email" className={tabClass}>
-					Email
-				</Link>
-				<Link to="/admin/contributions" className={tabClass}>
-					Money
-				</Link>
-				<Link to="/admin/cycle" className={tabClass}>
-					Cycle
-				</Link>
-			</nav>
-			<Outlet />
-		</section>
+		<div className="flex flex-col gap-6 pt-6 pb-12 lg:flex-row lg:gap-10 lg:pt-8">
+			<aside className="lg:w-[220px] lg:shrink-0">
+				<p className="display mb-3 hidden px-3 text-[22px] tracking-[0.06em] lg:block">
+					<span className="text-amber">Admin</span>
+				</p>
+				<nav
+					aria-label="Admin"
+					className="-mx-5 flex gap-1 overflow-x-auto px-5 pb-1 lg:sticky lg:top-6 lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0"
+				>
+					{TABS.map((t) => (
+						<Link
+							key={t.to}
+							to={t.to}
+							activeOptions={{ exact: "exact" in t }}
+							className={tabClass}
+						>
+							{t.label}
+						</Link>
+					))}
+				</nav>
+			</aside>
+			<div className="min-w-0 flex-1">
+				<Outlet />
+			</div>
+		</div>
 	);
 }

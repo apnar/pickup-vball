@@ -1,5 +1,4 @@
 import { safeReturnPath } from "@pickup-vball/email/links";
-import { Blueprint } from "@pickup-vball/ui/components/blueprint";
 import { Button } from "@pickup-vball/ui/components/button";
 import { Input } from "@pickup-vball/ui/components/input";
 import { Label } from "@pickup-vball/ui/components/label";
@@ -15,6 +14,10 @@ import z from "zod";
 
 import { authClient } from "@/lib/auth-client";
 
+/**
+ * Password sign-in. The secondary way in on the login page: most players
+ * never set a password, but an admin has to.
+ */
 export default function SignInForm() {
 	const navigate = useNavigate();
 	const router = useRouter();
@@ -37,7 +40,7 @@ export default function SignInForm() {
 						// router has to fetch it again before we move.
 						await router.invalidate();
 						navigate({ to: safeReturnPath(redirect) });
-						toast.success("You're in.");
+						toast.success("You’re signed in.");
 					},
 					onError: (error) => {
 						toast.error(error.error.message || error.error.statusText);
@@ -47,72 +50,63 @@ export default function SignInForm() {
 		},
 		validators: {
 			onSubmit: z.object({
-				email: z.email("Invalid email address"),
-				password: z.string().min(8, "Password must be at least 8 characters"),
+				email: z.email("Enter a valid email address."),
+				password: z.string().min(8, "Passwords are at least 8 characters."),
 			}),
 		},
 	});
 
 	return (
-		<Blueprint className="mx-auto w-full max-w-md p-6">
-			<span className="kicker mb-3 block text-steel-700">Sign in</span>
-			<h1 className="mb-6 font-heading text-[32px] uppercase leading-9 tracking-[0.02em]">
-				Back for more.
-			</h1>
-
+		<div className="flex flex-col gap-4">
 			<form
 				onSubmit={(e) => {
 					e.preventDefault();
 					e.stopPropagation();
 					form.handleSubmit();
 				}}
-				className="space-y-4"
+				className="flex flex-col gap-4"
 			>
-				<div>
-					<form.Field name="email">
-						{(field) => (
-							<div className="space-y-2">
-								<Label htmlFor={field.name}>Email</Label>
-								<Input
-									id={field.name}
-									name={field.name}
-									type="email"
-									value={field.state.value}
-									onBlur={field.handleBlur}
-									onChange={(e) => field.handleChange(e.target.value)}
-								/>
-								{field.state.meta.errors.map((error) => (
-									<p key={error?.message} className="text-destructive text-xs">
-										{error?.message}
-									</p>
-								))}
-							</div>
-						)}
-					</form.Field>
-				</div>
+				<form.Field name="email">
+					{(field) => (
+						<div className="flex flex-col gap-1.5">
+							<Label htmlFor={field.name}>Email</Label>
+							<Input
+								id={field.name}
+								name={field.name}
+								type="email"
+								value={field.state.value}
+								onBlur={field.handleBlur}
+								onChange={(e) => field.handleChange(e.target.value)}
+							/>
+							{field.state.meta.errors.map((error) => (
+								<p key={error?.message} className="m-0 text-[13px] text-danger">
+									{error?.message}
+								</p>
+							))}
+						</div>
+					)}
+				</form.Field>
 
-				<div>
-					<form.Field name="password">
-						{(field) => (
-							<div className="space-y-2">
-								<Label htmlFor={field.name}>Password</Label>
-								<Input
-									id={field.name}
-									name={field.name}
-									type="password"
-									value={field.state.value}
-									onBlur={field.handleBlur}
-									onChange={(e) => field.handleChange(e.target.value)}
-								/>
-								{field.state.meta.errors.map((error) => (
-									<p key={error?.message} className="text-destructive text-xs">
-										{error?.message}
-									</p>
-								))}
-							</div>
-						)}
-					</form.Field>
-				</div>
+				<form.Field name="password">
+					{(field) => (
+						<div className="flex flex-col gap-1.5">
+							<Label htmlFor={field.name}>Password</Label>
+							<Input
+								id={field.name}
+								name={field.name}
+								type="password"
+								value={field.state.value}
+								onBlur={field.handleBlur}
+								onChange={(e) => field.handleChange(e.target.value)}
+							/>
+							{field.state.meta.errors.map((error) => (
+								<p key={error?.message} className="m-0 text-[13px] text-danger">
+									{error?.message}
+								</p>
+							))}
+						</div>
+					)}
+				</form.Field>
 
 				<form.Subscribe
 					selector={(state) => ({
@@ -123,26 +117,22 @@ export default function SignInForm() {
 					{({ canSubmit, isSubmitting }) => (
 						<Button
 							type="submit"
+							variant="outline"
 							className="w-full"
 							disabled={!canSubmit || isSubmitting}
 						>
-							{isSubmitting ? "Submitting..." : "Sign In"}
+							{isSubmitting ? "Signing in..." : "Sign in"}
 						</Button>
 					)}
 				</form.Subscribe>
 			</form>
 
-			<div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-				<span className="text-[13px] text-neutral-700 leading-6">
-					No account? Sean makes those.
-				</span>
-				<Link
-					to="/forgot-password"
-					className="text-[13px] text-steel-700 leading-6"
-				>
-					Forgot it? Happens to the best of us.
-				</Link>
-			</div>
-		</Blueprint>
+			<Link
+				to="/forgot-password"
+				className="flex min-h-11 items-center self-start text-[14px]"
+			>
+				Forgot your password?
+			</Link>
+		</div>
 	);
 }

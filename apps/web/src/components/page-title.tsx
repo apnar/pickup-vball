@@ -1,25 +1,25 @@
-/** Two-line condensed display heading; the second line reads in the accent. */
+/**
+ * The page's one big heading, with an optional line of plain copy under it.
+ * `hero` is the size the mockups give "This week"; everything else is a step
+ * down so a page full of admin tables does not open by shouting.
+ */
 export default function PageTitle({
-	line1,
-	line2,
+	title,
+	sub,
 	size = "default",
 }: {
-	line1: string;
-	line2: string;
+	title: React.ReactNode;
+	sub?: React.ReactNode;
 	size?: "default" | "hero";
 }) {
 	const sizeClass =
 		size === "hero"
-			? "text-[clamp(48px,7vw,96px)]"
-			: "text-[clamp(40px,6vw,80px)]";
+			? "text-[52px] md:text-[64px]"
+			: "text-[44px] md:text-[56px]";
 	return (
-		<h1
-			className={`-ml-[0.05em] font-heading font-semibold uppercase leading-[1.02] tracking-[0.01em] ${sizeClass}`}
-		>
-			<span className="block">{line1}</span>
-			<span className={size === "hero" ? "block" : "block text-steel-700"}>
-				{line2}
-			</span>
-		</h1>
+		<div className="flex flex-col gap-1.5">
+			<h1 className={`display m-0 ${sizeClass}`}>{title}</h1>
+			{sub ? <p className="m-0 max-w-[60ch] text-subtle">{sub}</p> : null}
+		</div>
 	);
 }

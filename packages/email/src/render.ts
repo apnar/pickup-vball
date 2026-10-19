@@ -4,6 +4,8 @@
  * a phone happens to open.
  */
 
+import { SITE_NAME } from "./sender";
+
 export function escapeHtml(value: string): string {
 	return value
 		.replaceAll("&", "&amp;")
@@ -53,31 +55,49 @@ function neutralize(text: string): string {
 	return text.replace(/\{(?=[{%#])/g, "{\u200b");
 }
 
+/*
+ * The site is dark, but the body of an email stays light: half the mail apps
+ * out there force their own background behind a dark one, or invert it, and a
+ * navy card with amber text comes out unreadable. Only the header band carries
+ * the site's colours. Every text colour here clears 4.5:1 against what it sits
+ * on; amber is never used for text on white, where it does not.
+ */
+const NAVY = "#0E1726";
+const AMBER = "#F2A93B";
+const INK = "#1d2433";
+const MUTED = "#4b5567";
+const LINK = "#24365A";
+
 const FONT =
-	"font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;";
+	"font-family: 'Barlow', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;";
+const CONDENSED =
+	"font-family: 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif;";
 
 const styles = {
-	body: `margin:0; padding:0; background:#f4f3ef; ${FONT} color:#1a1a1a;`,
+	body: `margin:0; padding:0; background:#eef1f5; ${FONT} color:${INK};`,
 	wrap: "max-width:560px; margin:0 auto; padding:24px 16px;",
-	card: "background:#ffffff; border:1px solid #d9d6cc; padding:28px 24px;",
-	kicker:
-		"margin:0 0 8px; font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:#4a6d8c;",
-	h1: "margin:0 0 16px; font-size:26px; line-height:1.15; font-weight:700; text-transform:uppercase; letter-spacing:0.01em;",
+	band: `background:${NAVY}; padding:16px 24px; border-radius:16px 16px 0 0;`,
+	brand: `margin:0; ${CONDENSED} font-size:22px; line-height:1.1; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; color:${AMBER};`,
+	card: "background:#ffffff; border:1px solid #d5dbe5; border-top:0; border-radius:0 0 16px 16px; padding:28px 24px;",
+	kicker: `margin:0 0 8px; font-size:13px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:${MUTED};`,
+	h1: `margin:0 0 16px; ${CONDENSED} font-size:30px; line-height:1.1; font-weight:800; text-transform:uppercase; letter-spacing:0.01em; color:${NAVY};`,
 	p: "margin:0 0 14px; font-size:16px; line-height:1.5;",
 	facts:
 		"margin:0 0 18px; padding:0; border-collapse:collapse; font-size:16px; line-height:1.5;",
-	factLabel:
-		"padding:4px 12px 4px 0; font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:#4a6d8c; vertical-align:baseline; white-space:nowrap;",
+	factLabel: `padding:4px 12px 4px 0; font-size:12px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:${MUTED}; vertical-align:baseline; white-space:nowrap;`,
 	factValue: "padding:4px 0; font-weight:600; vertical-align:baseline;",
-	button:
-		"display:inline-block; padding:12px 20px; background:#2f5f86; color:#ffffff !important; text-decoration:none; font-weight:700; font-size:15px;",
-	muted: "color:#5f5f5f; font-size:14px; line-height:1.5;",
-	footer:
-		"margin:16px 0 0; padding:0 4px; color:#6b6b6b; font-size:12px; line-height:1.5;",
-	link: "color:#2f5f86;",
+	button: `display:inline-block; padding:13px 22px; background:${AMBER}; color:${NAVY} !important; text-decoration:none; ${CONDENSED} font-weight:700; font-size:17px; letter-spacing:0.04em; text-transform:uppercase; border-radius:12px;`,
+	muted: `color:${MUTED}; font-size:14px; line-height:1.5;`,
+	footer: `margin:16px 0 0; padding:0 4px; color:${MUTED}; font-size:12px; line-height:1.5;`,
+	link: `color:${LINK}; text-decoration:underline;`,
 } as const;
 
 export type Fact = { label: string; value: string };
+
+/** One escaped paragraph. */
+export function para(text: string): string {
+	return `<p style="${styles.p}">${escapeHtml(text)}</p>`;
+}
 
 /** Escaped paragraphs from a block of plain text (blank line = new paragraph). */
 export function paragraphs(text: string): string {
@@ -108,22 +128,27 @@ export function button(label: string, href: string): string {
 	return `<p style="margin:20px 0 6px;"><a href="${escapeHtml(href)}" style="${styles.button}">${escapeHtml(label)}</a></p>`;
 }
 
+/** A URL shown as itself, for the "or paste this" lines. Escaped. */
+export function urlLink(url: string): string {
+	return `<a href="${escapeHtml(url)}" style="${styles.link} word-break:break-all;">${escapeHtml(url)}</a>`;
+}
+
 export function muted(html: string): string {
 	return `<p style="${styles.p} ${styles.muted}">${html}</p>`;
 }
 
 /**
  * Footer for list emails: who this is and how to step away. There is no
- * unsubscribe-and-stay-on-the-roster any more -- email is how this group
- * talks, so leaving the email means leaving the Mondays for a while. The
+ * unsubscribe-and-stay-on-the-roster -- email is how this group talks, so
+ * leaving the email means stepping away from the nights for a while. The
  * link opens a form that asks for how long and why. Uses raw placeholders.
  */
 export function listFooter(): string {
-	return `<p style="${styles.footer}">You get these because you play. Links in this email sign you in, so don't forward it. Hurt, travelling, or just done for now? <a href="${PARAM.unsubscribeUrl}" style="${styles.link}">Take a break</a> and we will hold your spot.</p>`;
+	return `<p style="${styles.footer}">You get these because you are in the group. Links in this email sign you in, so please don't forward it. Need time off for an injury, travel or anything else? <a href="${PARAM.unsubscribeUrl}" style="${styles.link}">Take a break</a> and we will keep your spot.</p>`;
 }
 
 export function listFooterText(): string {
-	return `You get these because you play.\nLinks in this email sign you in, so don't forward it.\nHurt, travelling, or just done for now? Take a break: ${PARAM.unsubscribeUrl}`;
+	return `You get these because you are in the group.\nLinks in this email sign you in, so please don't forward it.\nNeed time off for an injury, travel or anything else? Take a break: ${PARAM.unsubscribeUrl}`;
 }
 
 export function layout(input: {
@@ -143,9 +168,11 @@ export function layout(input: {
 </head>
 <body style="${styles.body}">
 <div style="${styles.wrap}">
+<div style="${styles.band}">
+<p style="${styles.brand}">${escapeHtml(SITE_NAME)}</p>
+</div>
 <div style="${styles.card}">
-<p style="${styles.kicker}">${escapeHtml(input.kicker ?? "Sean's Monday Night Run")}</p>
-<h1 style="${styles.h1}">${escapeHtml(input.heading)}</h1>
+${input.kicker ? `<p style="${styles.kicker}">${escapeHtml(input.kicker)}</p>\n` : ""}<h1 style="${styles.h1}">${escapeHtml(input.heading)}</h1>
 ${input.bodyHtml}
 </div>
 ${input.footerHtml ?? ""}

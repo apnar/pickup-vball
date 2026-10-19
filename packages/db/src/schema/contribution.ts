@@ -29,7 +29,7 @@ export const contributionCall = sqliteTable(
 		body: text("body").notNull(),
 		/** Whole dollars, per person. */
 		amount: integer("amount").notNull(),
-		/** One line: "Venmo @sean, or cash at the door." */
+		/** One line: "Venmo @Viroj7, or cash at the gym." */
 		instructions: text("instructions").notNull(),
 		/** Null until the call actually goes out; see `openCall`/`attachSend`. */
 		sendId: text("send_id").references(() => emailSend.id, {

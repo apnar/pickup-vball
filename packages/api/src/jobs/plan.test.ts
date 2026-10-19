@@ -4,9 +4,9 @@ import type { StageKey } from "../cycle";
 import { runInstant } from "../run";
 import { planStage, type Stamps } from "./plan";
 
-/** A Monday night game. Tip-off nine, as it has been since 2017. */
+/** A Monday night, starting at 7:30 like most of them. */
 const DATE = "2026-09-14";
-const START = "21:00";
+const START = "19:30";
 
 const at = (date: string, time: string) => runInstant(date, time);
 
@@ -34,12 +34,12 @@ describe("the ordinary week", () => {
 		expect(plan(at("2026-09-13", "16:30")).run).toBeNull();
 	});
 
-	it("asks the list at five the evening before", () => {
+	it("calls the group at five the evening before", () => {
 		expect(plan(at("2026-09-13", "17:00")).run).toBe("call");
 	});
 
-	it("prods at two if the call went out yesterday", () => {
-		const p = plan(at(DATE, "14:00"), {
+	it("reminds at noon if the call went out yesterday", () => {
+		const p = plan(at(DATE, "12:00"), {
 			stamps: stamps({ call: at("2026-09-13", "17:00") }),
 			lastEmailAt: at("2026-09-13", "17:00"),
 		});
@@ -47,46 +47,46 @@ describe("the ordinary week", () => {
 		expect(p.skip).toEqual([]);
 	});
 
-	it("last-calls at six, then decides at half seven", () => {
+	it("last-calls at half three, then decides at half five", () => {
 		const done = {
 			stamps: stamps({
 				call: at("2026-09-13", "17:00"),
-				nudge: at(DATE, "14:00"),
+				nudge: at(DATE, "12:00"),
 			}),
-			lastEmailAt: at(DATE, "14:00"),
+			lastEmailAt: at(DATE, "12:00"),
 		};
-		expect(plan(at(DATE, "18:00"), done).run).toBe("lastCall");
+		expect(plan(at(DATE, "15:30"), done).run).toBe("lastCall");
 		expect(
-			plan(at(DATE, "19:30"), {
-				stamps: stamps({ ...done.stamps, lastCall: at(DATE, "18:00") }),
-				lastEmailAt: at(DATE, "18:00"),
+			plan(at(DATE, "17:30"), {
+				stamps: stamps({ ...done.stamps, lastCall: at(DATE, "15:30") }),
+				lastEmailAt: at(DATE, "15:30"),
 			}).run,
 		).toBe("final");
 	});
 });
 
 describe("a gym booked late", () => {
-	// Booked at four on game day. The five-o'clock-yesterday call is overdue,
-	// and so is the two o'clock prod.
-	it("tells the list it exists before it nags them about it", () => {
-		const p = plan(at(DATE, "16:30"));
+	// Booked at one on the day. The five-o'clock-yesterday call is overdue,
+	// and so is the noon reminder.
+	it("tells the group it exists before reminding anyone about it", () => {
+		const p = plan(at(DATE, "13:00"));
 		expect(p.run).toBe("call");
 		expect(p.silent).toBe(false);
 	});
 
 	it("holds the next stage for ninety minutes", () => {
-		const p = plan(at(DATE, "17:30"), {
-			stamps: stamps({ call: at(DATE, "16:30") }),
-			lastEmailAt: at(DATE, "16:30"),
+		const p = plan(at(DATE, "14:00"), {
+			stamps: stamps({ call: at(DATE, "13:00") }),
+			lastEmailAt: at(DATE, "13:00"),
 		});
 		expect(p.run).toBeNull();
 		expect(p.reason).toMatch(/holding/);
 	});
 
-	it("abandons the stale prod rather than sending it late", () => {
-		const p = plan(at(DATE, "18:00"), {
-			stamps: stamps({ call: at(DATE, "16:30") }),
-			lastEmailAt: at(DATE, "16:00"),
+	it("abandons the stale reminder rather than sending it late", () => {
+		const p = plan(at(DATE, "15:30"), {
+			stamps: stamps({ call: at(DATE, "13:00") }),
+			lastEmailAt: at(DATE, "13:00"),
 		});
 		expect(p.run).toBe("lastCall");
 		expect(p.skip).toEqual<StageKey[]>(["nudge"]);
@@ -94,22 +94,23 @@ describe("a gym booked late", () => {
 });
 
 describe("the verdict is not optional", () => {
-	it("ignores the cooldown -- exactly ninety minutes after the last call", () => {
-		// 18:00 to 19:30 is the cooldown to the minute. The day somebody makes
-		// `final` respect it, this test says whether anyone gets told.
-		const p = plan(at(DATE, "19:30"), {
+	it("ignores the cooldown -- half an hour after a late last call", () => {
+		// A last call held by the cooldown until five leaves the verdict well
+		// inside the ninety minutes. The day somebody makes `final` respect
+		// it, this test says whether anyone gets told.
+		const p = plan(at(DATE, "17:30"), {
 			stamps: stamps({
 				call: at("2026-09-13", "17:00"),
-				nudge: at(DATE, "14:00"),
-				lastCall: at(DATE, "18:00"),
+				nudge: at(DATE, "12:00"),
+				lastCall: at(DATE, "17:00"),
 			}),
-			lastEmailAt: at(DATE, "18:00"),
+			lastEmailAt: at(DATE, "17:00"),
 		});
 		expect(p.run).toBe("final");
 	});
 
-	it("records a missed verdict after tip-off but emails nobody", () => {
-		const p = plan(at(DATE, "21:30"), {
+	it("records a missed verdict after the start but emails nobody", () => {
+		const p = plan(at(DATE, "20:00"), {
 			stamps: stamps({ call: at("2026-09-13", "17:00") }),
 		});
 		expect(p.run).toBe("final");
@@ -118,12 +119,12 @@ describe("the verdict is not optional", () => {
 	});
 
 	it("goes quiet once the verdict is in", () => {
-		const p = plan(at(DATE, "22:00"), {
+		const p = plan(at(DATE, "21:00"), {
 			stamps: stamps({
 				call: at("2026-09-13", "17:00"),
-				nudge: at(DATE, "14:00"),
-				lastCall: at(DATE, "18:00"),
-				final: at(DATE, "19:30"),
+				nudge: at(DATE, "12:00"),
+				lastCall: at(DATE, "15:30"),
+				final: at(DATE, "17:30"),
 			}),
 		});
 		expect(p.run).toBeNull();
@@ -133,7 +134,7 @@ describe("the verdict is not optional", () => {
 describe("the week the clocks change", () => {
 	it("still calls the evening before, an hour of offset notwithstanding", () => {
 		// 2026-03-09 is the Monday after spring-forward. The call is at
-		// UTC-5, the game at UTC-4.
+		// UTC-5, the night itself at UTC-4.
 		const p = planStage({
 			date: "2026-03-09",
 			startTime: START,

@@ -1,85 +1,48 @@
-import { Blueprint } from "@pickup-vball/ui/components/blueprint";
-import { Button, buttonVariants } from "@pickup-vball/ui/components/button";
 import { Link } from "@tanstack/react-router";
 
 import GymMoneyNotice from "@/components/gym-money-notice";
 import PageTitle from "@/components/page-title";
 import RsvpBoard from "@/components/rsvp-board";
+import SectionKicker from "@/components/section-kicker";
 import { conditions } from "@/content/run";
 
-/** What a player sees: the whole thing, headcount included. */
+/** What a player sees: the next night, who is coming, and how it all works. */
 export default function PlayerHome() {
 	return (
-		<>
-			<section className="pt-18 pb-12">
-				<PageTitle
-					size="hero"
-					line1="Monday. 9 PM."
-					line2="Show up or get talked about."
-				/>
-				<p className="mt-7 max-w-[60ch] text-base leading-6">
-					A weekly full-court run for guys who peaked in high school and refuse
-					to admit it. Five-on-five if enough of you actually show. Call your
-					own fouls. And no, that was not a travel.
-				</p>
-				<div className="mt-6 flex flex-wrap gap-2.5">
-					<Button
-						onClick={() =>
-							document
-								.getElementById("rsvp")
-								?.scrollIntoView({ behavior: "smooth", block: "start" })
-						}
-					>
-						Put my name in
-					</Button>
-					<Link
-						to="/rules"
-						className={buttonVariants({
-							variant: "ghost",
-							className: "no-underline",
-						})}
-					>
-						Read the rules first
-					</Link>
-				</div>
-			</section>
-
-			<section className="pt-6 pb-12">
-				<Blueprint>
-					<header className="kicker flex flex-wrap border-divider border-b leading-6">
-						<span className="min-w-[16ch] flex-1 px-6 py-3">
-							Standing game conditions
-						</span>
-						<span className="whitespace-nowrap border-divider border-l px-6 py-3 text-neutral-700">
-							Every Monday
-						</span>
-						<span className="whitespace-nowrap border-divider border-l px-6 py-3 text-neutral-700">
-							Sheet 01
-						</span>
-					</header>
-					{conditions.map((c) => (
-						<div
-							key={c.num}
-							className="grid grid-cols-1 items-baseline gap-x-6 border-ink/8 border-b px-6 py-3 md:grid-cols-[72px_1fr_1fr_1.4fr]"
-						>
-							<span className="kicker tnum text-steel-700">{c.num}</span>
-							<span className="text-[15px] leading-6">{c.prop}</span>
-							<span className="font-heading font-semibold text-[22px] leading-6 tracking-[0.02em]">
-								{c.val}
-							</span>
-							<span className="hidden text-[15px] text-neutral-700 leading-6 md:block">
-								{c.rem}
-							</span>
-						</div>
-					))}
-					<p className="m-0 px-6 py-3 text-[13px] text-neutral-700 leading-6">
-						Conditions hold until Sean's hip says otherwise.
-					</p>
-				</Blueprint>
-			</section>
+		<section className="flex flex-col gap-6 pt-8 pb-12 md:pt-10">
+			<PageTitle
+				size="hero"
+				title="This week"
+				sub="The next night on the schedule, and who’s coming."
+			/>
 
 			<GymMoneyNotice />
 			<RsvpBoard />
-		</>
+
+			<section aria-labelledby="how-h" className="mt-6 flex flex-col gap-4">
+				<SectionKicker id="how-h" className="m-0">
+					How it works
+				</SectionKicker>
+				<dl className="m-0 grid grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))] gap-3">
+					{conditions.map((c) => (
+						<div
+							key={c.prop}
+							className="flex flex-col gap-1 rounded-card bg-surface p-4"
+						>
+							<dt className="kicker">{c.prop}</dt>
+							<dd className="m-0 flex flex-col gap-1">
+								<span className="font-bold font-heading text-[22px] uppercase leading-tight tracking-[0.02em]">
+									{c.val}
+								</span>
+								<span className="text-[14px] text-subtle">{c.rem}</span>
+							</dd>
+						</div>
+					))}
+				</dl>
+				<p className="m-0 text-[14px] text-subtle">
+					New to the group? Read the <Link to="/rules">house rules</Link>.
+				</p>
+			</section>
+		</section>
 	);
 }

@@ -35,30 +35,30 @@ import { adminProcedure, protectedProcedure } from "../index";
 import { countRecipients, sendToList, tokensFor } from "../mail";
 
 const callSchema = z.object({
-	subject: z.string().trim().min(1, "Subject?").max(120),
-	body: z.string().trim().min(1, "Say something.").max(5000),
+	subject: z.string().trim().min(1, "Enter a subject.").max(120),
+	body: z.string().trim().min(1, "Enter a message.").max(5000),
 	amount: z
 		.number()
-		.int("Whole dollars.")
-		.positive("How much?")
-		.max(10_000, "That is not a gym, that is a mortgage."),
+		.int("Use whole dollars.")
+		.positive("Enter an amount.")
+		.max(10_000, "The amount can be at most $10,000."),
 	/** One line. The facts table it lands in has no room for paragraphs. */
 	instructions: z
 		.string()
 		.trim()
-		.min(1, "How does it get to Sean?")
-		.max(200, "Shorter. It goes in a table."),
+		.min(1, "Say how people should pay.")
+		.max(200, "Please keep it to one short line."),
 });
 
 const reminderSchema = z.object({
-	body: z.string().trim().min(1, "Say something.").max(5000),
+	body: z.string().trim().min(1, "Enter a message.").max(5000),
 });
 
 const toSelf = { toSelf: z.boolean().default(false) };
 
 function alreadyOpen(): never {
 	throw new ORPCError("CONFLICT", {
-		message: "A call is already open. Close the books on it first.",
+		message: "A request is already open. Close it before starting a new one.",
 	});
 }
 
@@ -66,7 +66,7 @@ async function requireOpenCall(db: Context["db"]): Promise<CallRow> {
 	const open = await findOpenCall(db);
 	if (!open) {
 		throw new ORPCError("BAD_REQUEST", {
-			message: "Nothing is open. Put out a call first.",
+			message: "There is no open request. Start one first.",
 		});
 	}
 	return open;
@@ -91,7 +91,7 @@ async function sendToMe(
 	);
 	if (!outcome.ok) {
 		throw new ORPCError("INTERNAL_SERVER_ERROR", {
-			message: `Brevo said no: ${outcome.error}`,
+			message: `The email could not be sent: ${outcome.error}`,
 		});
 	}
 	return {
@@ -209,7 +209,7 @@ export const contributionsRouter = {
 			const people = await listRecipients(context.db, "active");
 			if (people.length === 0) {
 				throw new ORPCError("BAD_REQUEST", {
-					message: "Nobody is on the list.",
+					message: "There is nobody active in the group to send to.",
 				});
 			}
 			const id = crypto.randomUUID();
@@ -243,7 +243,7 @@ export const contributionsRouter = {
 				await discardCall(context.db, id);
 				const reason = result?.failed[0]?.error ?? "nobody to send to";
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: `Nothing went out. Brevo said: ${reason}`,
+					message: `Nothing was sent: ${reason}`,
 				});
 			}
 			await attachSend(context.db, id, result.sendId);
@@ -261,7 +261,7 @@ export const contributionsRouter = {
 			};
 		}),
 
-	/** The nag, to whoever is still unpaid and still on the list. */
+	/** The reminder, to whoever is still unpaid and still on the list. */
 	sendReminder: adminProcedure
 		.input(reminderSchema.extend(toSelf))
 		.handler(async ({ context, input }) => {
@@ -281,8 +281,8 @@ export const contributionsRouter = {
 				throw new ORPCError("BAD_REQUEST", {
 					message:
 						audience.unpaid.length === 0
-							? "Everybody has paid. Close the books."
-							: "Everybody who still owes is on a break. Nobody to send to.",
+							? "Everyone has paid. You can close this request."
+							: "Everyone who has not paid is on a break, so there is nobody to send to.",
 				});
 			}
 			if (result.sent > 0) await markReminded(context.db, open.id);
@@ -306,7 +306,7 @@ export const contributionsRouter = {
 			});
 			if (!marked) {
 				throw new ORPCError("NOT_FOUND", {
-					message: "They were not billed on this call.",
+					message: "That player was not included in this request.",
 				});
 			}
 			return { ok: true };
@@ -317,7 +317,9 @@ export const contributionsRouter = {
 		const open = await requireOpenCall(context.db);
 		const closed = await closeCall(context.db, open.id);
 		if (!closed) {
-			throw new ORPCError("CONFLICT", { message: "Already closed." });
+			throw new ORPCError("CONFLICT", {
+				message: "This request is already closed.",
+			});
 		}
 		return { ok: true };
 	}),

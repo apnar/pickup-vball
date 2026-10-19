@@ -1,8 +1,7 @@
 /**
- * The copy that describes where an RSVP drive stands. One place, because it
- * is read on the board, on the confirm page a cycle email lands on, and in
- * the emails themselves -- and three copies of a joke drift into three
- * different jokes.
+ * The copy that describes where a night's RSVPs stand. One place, because it
+ * is read on the home page, on the confirm page a cycle email lands on, and
+ * beside the guest box -- and three copies of a sentence drift apart.
  */
 
 import type { Headcount } from "@pickup-vball/api/routers/rsvp";
@@ -13,106 +12,104 @@ export const ANSWERS: readonly RsvpAnswer[] = ["in", "maybe", "out"];
 
 export type Counts = Headcount["counts"];
 
+type Limits = { confirmAt: number; playAt: number; capacity: number };
+
+const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
+
 /** The one line at the top. First match wins. */
 export function headline(
 	counts: Counts,
-	limits: { confirmAt: number; playAt: number; capacity: number },
+	limits: Limits,
 	status: "scheduled" | "confirmed" | "canceled",
 	decided: boolean,
 ): string {
-	if (status === "canceled") {
-		return "Called off. Go lie about your back somewhere else.";
-	}
+	if (status === "canceled") return "This night is off.";
 	if (status === "confirmed") {
-		return decided ? "Game on. Nine sharp." : "We have a game. Ten said yes.";
+		return decided ? "It’s on. See you there." : "It’s on.";
 	}
-	if (counts.in >= limits.capacity) return "Sheet is full. Someone is sitting.";
-	if (counts.in >= limits.confirmAt) return "We have a game. Barely.";
-	if (counts.in >= limits.playAt) return "Enough to play. Not enough to relax.";
-	if (counts.in >= 5) return "Half court unless three more grow up.";
-	return "Not a run yet. Right now it's a carpool.";
+	if (counts.in >= limits.capacity) return "The night is full.";
+	if (counts.in >= limits.confirmAt) return "Two full sides are in.";
+	if (counts.in >= limits.playAt) return "Enough to play.";
+	return "Still filling up.";
 }
 
 /**
  * The next threshold, in words, always with a number in it.
  *
- * The sheet holds more than the number that confirms a run, so "five spots
- * left" and "three more to go" are both true at once and together they are
- * gibberish. Lead with the number that decides whether there is a run at all,
- * and only mention spots once there is one.
+ * The sheet holds more than the number that confirms a night, so "six spots
+ * left" and "four more to confirm" are both true at once and side by side
+ * they contradict each other. Lead with the number that decides whether
+ * there is a night at all, and only mention spots once there is one.
  */
 export function subline(
 	counts: Counts,
-	limits: { confirmAt: number; playAt: number; capacity: number },
+	limits: Limits,
 	status: "scheduled" | "confirmed" | "canceled",
 ): string {
-	const plural = (n: number, one: string, many: string) =>
-		n === 1 ? one : many;
-
 	if (status === "canceled") {
-		return `${counts.in} in at the final call. ${limits.playAt} was the number. Next Monday, then.`;
+		return `${counts.in} ${plural(counts.in, "was", "were")} in when the night was decided, and ${limits.playAt} are needed to play.`;
 	}
 	if (status === "confirmed") {
-		const spare = counts.in - limits.playAt + 1;
-		if (counts.in >= limits.capacity) {
-			return "First to the gym plays. Last to the gym referees, badly.";
+		const left = limits.capacity - counts.in;
+		if (left <= 0) {
+			return "If you can’t make it after all, switch to out so the spot can go to someone else.";
 		}
-		return `It stays on unless ${spare} of you ${plural(spare, "gets", "get")} cute before 7:30.`;
+		return `${left} ${plural(left, "spot", "spots")} left.`;
 	}
 	if (counts.in >= limits.playAt) {
-		const need = limits.confirmAt - counts.in;
+		const need = Math.max(0, limits.confirmAt - counts.in);
 		const maybes = counts.maybe
-			? ` ${counts.maybe} ${plural(counts.maybe, "maybe does", "maybes do")} not count; a maybe is a mailing list.`
+			? ` ${counts.maybe} ${plural(counts.maybe, "maybe isn’t", "maybes aren’t")} counted.`
 			: "";
-		return `${need} more ${plural(need, "yes", "yeses")} and it locks.${maybes}`;
+		return need > 0
+			? `${need} more to confirm the night.${maybes}`
+			: `Confirmed as soon as the count is updated.${maybes}`;
 	}
 	const short = limits.playAt - counts.in;
 	const quiet = counts.silent
-		? ` ${counts.silent} ${plural(counts.silent, "person has", "people have")} not said a word.`
-		: " Everybody answered. Put it in the trophy case.";
-	return `${short} short of the minimum.${quiet}`;
+		? ` ${counts.silent} ${plural(counts.silent, "person hasn’t", "people haven’t")} replied yet.`
+		: " Everyone has replied.";
+	return `${short} more needed to play.${quiet}`;
 }
 
 /** What the viewer's own answer means for them, under the picker. */
 export function yourLine(answer: RsvpAnswer | null, locked: boolean): string {
-	if (locked) return "Called at 7:31. Nothing you tap now changes it.";
+	if (locked) return "This night has been decided, so answers are closed.";
 	switch (answer) {
 		case "in":
-			return "In. Changing this after 6 PM is public record.";
+			return "You’re in. If plans change, switch to out so your spot can go to someone else.";
 		case "maybe":
-			return "Maybe does not count toward ten. It keeps you on the emails, and that is the whole job.";
+			return "Maybe doesn’t hold a spot. You’ll still get the last-call email.";
 		case "out":
-			return "Out. Noted, filed, read aloud.";
+			return "You’re out. Thanks for letting everyone know.";
 		default:
-			return "Nothing from you yet. The list notices.";
+			return "You haven’t answered yet.";
 	}
 }
 
 /**
- * How keen the run is on you bringing somebody.
+ * What to say beside the guest box.
  *
- * Guests are a remedy for being short, not a feature: the list gets asked five
- * times over two days and usually fills itself, and a box that reads the same
- * at five o'clock as it does at seven quietly suggests every Monday needs a
- * ringer. Nothing here stops anybody -- you can always put a name in, and the
- * night you already promised your brother-in-law is not the night to argue
- * with a form. Only the tone moves.
+ * Guests are for short nights. The group is asked several times over two
+ * days and usually fills itself, and a box that reads the same at noon as it
+ * does at the last call suggests every night needs outside help. Nothing
+ * here stops anybody -- you can always add a name, and a guest you already
+ * invited is not something to argue with a form about. Only the wording
+ * changes.
  */
 export function guestLine(
 	counts: Counts,
-	limits: { confirmAt: number; playAt: number; capacity: number },
+	limits: Limits,
 	lastCallPassed: boolean,
 	locked: boolean,
 ): string {
-	if (locked) {
-		return "The count is closed. Whoever you were bringing, tell them yourself.";
-	}
+	if (locked) return "Answers are closed for this night.";
 	if (counts.in >= limits.confirmAt) {
-		return `${counts.in} in. The list handled it, so anybody you bring now is taking a regular's minutes.`;
+		return `${counts.in} are in, so the night is covered. A guest now takes a spot someone in the group might want.`;
 	}
 	if (!lastCallPassed) {
-		return "The list has until six to sort itself out, and it usually does. Put a name in now and you are guessing.";
+		return "Guests help most on short nights. The group usually fills up by the last call, so it may be worth waiting.";
 	}
 	const short = limits.confirmAt - counts.in;
-	return `Six has come and gone and we are ${short} short. Now is the night to know somebody.`;
+	return `The night is ${short} short of ${limits.confirmAt}. A guest would help.`;
 }

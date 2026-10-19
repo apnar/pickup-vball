@@ -8,8 +8,10 @@ import {
 	listFooter,
 	listFooterText,
 	muted,
+	para,
+	urlLink,
 } from "../render";
-import { baseFacts, nameList, para, type RsvpFacts } from "./rsvp";
+import { baseFacts, nameList, peopleAre, type RsvpFacts } from "./rsvp";
 
 export type RsvpFinalInput = RsvpFacts & {
 	decision: "on" | "off";
@@ -17,37 +19,36 @@ export type RsvpFinalInput = RsvpFacts & {
 };
 
 /**
- * Stage 05. Half past seven, the count is what it is.
+ * Stage 05. The verdict: the count is what it is.
  *
  * The only email in the cycle with no answer buttons: the question is closed.
  * When the answer is "off" it also goes wider than the rest -- to the people
- * who never answered, and to whoever typed in a guest -- because the guy who
- * ignored five emails is exactly the guy who drives to a locked gym out of
- * habit, and a guest has no inbox at all.
+ * who never answered, and to whoever signed up a guest -- because someone
+ * who missed every email is the one most likely to drive to a locked gym out
+ * of habit, and a guest has no inbox here at all.
  */
 export function rsvpFinalEmail(input: RsvpFinalInput): Rendered {
 	const on = input.decision === "on";
-	const heading = on ? "It is happening." : "Not tonight.";
+	const heading = on ? "On for tonight." : "No volleyball tonight.";
 	const kicker = on ? "Confirmed" : "Called off";
 	const lead = on
-		? `${input.inCount} in. ${input.inCount >= input.confirmAt ? "That is a run." : `${input.confirmAt} would have been nicer, but ${input.playAt} is the number and we cleared it.`} Bring water and a jump shot.`
-		: `${input.inCount}. That is a shooting session with a scoreboard. The gym stays empty, Sean paid for it anyway, and you can think about that on Wednesday.`;
+		? `${peopleAre(input.inCount)} in, so we are playing tonight.${input.inCount >= input.confirmAt ? "" : " That is fewer than usual, so sides may be smaller."} See you at the gym.`
+		: `${peopleAre(input.inCount)} in, and we need at least ${input.playAt} to play, so tonight is called off. Thank you to everyone who answered. Look out for the next night's email.`;
 
 	const facts = baseFacts(input);
 	if (!on && input.maybeNames.length > 0) {
 		facts.push({ label: "Maybe", value: nameList(input.maybeNames) });
 	}
 
-	const sponsorNote = muted(
-		escapeHtml(
-			on
-				? "Put somebody down who is not on the list? They are expecting you to tell them. Tell them."
-				: "Put somebody down who is not on the list? They do not get these. Go tell them before they drive over.",
-		),
-	);
+	const guestNote = on
+		? "Signed up a guest who is not on the email list? They do not get these emails, so please pass the details on."
+		: "Signed up a guest who is not on the email list? They do not get these emails, so please let them know before they head over.";
+	const link = emailLink(input.siteUrl, on ? "/#rsvp" : "/schedule");
 
 	const html = layout({
-		title: on ? `Run is on: ${input.dateLabel}` : `No run: ${input.dateLabel}`,
+		title: on
+			? `Volleyball is on: ${input.dateLabel}`
+			: `Called off: ${input.dateLabel}`,
 		kicker,
 		heading,
 		bodyHtml: [
@@ -56,14 +57,11 @@ export function rsvpFinalEmail(input: RsvpFinalInput): Rendered {
 			input.notes && on ? para(input.notes) : "",
 			on && input.permitUrl
 				? muted(
-						`Gym staff want proof? The permit is at <a href="${escapeHtml(input.permitUrl)}" style="color:#2f5f86;">${escapeHtml(input.permitUrl)}</a>.`,
+						`If gym staff ask to see the permit, it is here: ${urlLink(input.permitUrl)}`,
 					)
 				: "",
-			button(
-				on ? "See who is in" : "The schedule",
-				emailLink(input.siteUrl, on ? "/#rsvp" : "/schedule"),
-			),
-			sponsorNote,
+			button(on ? "See who's in" : "See the schedule", link),
+			muted(escapeHtml(guestNote)),
 		]
 			.filter(Boolean)
 			.join("\n"),
@@ -79,19 +77,17 @@ export function rsvpFinalEmail(input: RsvpFinalInput): Rendered {
 		...(input.notes && on ? ["", input.notes] : []),
 		...(on && input.permitUrl ? ["", `Permit: ${input.permitUrl}`] : []),
 		"",
-		emailLink(input.siteUrl, on ? "/#rsvp" : "/schedule"),
+		link,
 		"",
-		on
-			? "Put somebody down who is not on the list? They are expecting you to tell them. Tell them."
-			: "Put somebody down who is not on the list? They do not get these. Go tell them before they drive over.",
+		guestNote,
 		"",
 		listFooterText(),
 	].join("\n");
 
 	return {
 		subject: on
-			? `Run is on. ${input.inCount} in.`
-			: `No run tonight. ${input.inCount} in.`,
+			? `Volleyball is on tonight. ${input.inCount} in.`
+			: `No volleyball tonight. ${input.inCount} in, ${input.playAt} needed.`,
 		html,
 		text,
 	};

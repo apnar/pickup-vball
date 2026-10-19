@@ -28,14 +28,18 @@ import { sendWelcome } from "../mail";
 import { NO_RESPONSES } from "../responses";
 import { formatGameDate, isAdmin, todayInRunTimezone } from "../run";
 
-const emailSchema = z.email("That is not an email address.").max(254);
+const emailSchema = z.email("Enter a valid email address.").max(254);
 const nameSchema = z
 	.string()
 	.trim()
-	.max(40, "Shorter name, please.")
-	.refine((v) => !/[{}]/.test(v), "Names don't have braces in them.");
-/** Short on purpose: this is "torn calf, back in a month", not a letter. */
-const reasonSchema = z.string().trim().max(200, "Keep it short.").optional();
+	.max(40, "Names can be up to 40 characters.")
+	.refine((v) => !/[{}]/.test(v), "Names can't contain { or }.");
+/** Short on purpose: this is "sprained ankle, back in a month", not a letter. */
+const reasonSchema = z
+	.string()
+	.trim()
+	.max(200, "Please keep it under 200 characters.")
+	.optional();
 
 const suspendInput = z.object({
 	userId: z.string().min(1).optional(),
@@ -54,7 +58,7 @@ function targetOf(context: Context, userId: string | undefined): string {
 	if (!userId || userId === me.id) return me.id;
 	if (!isAdmin(me)) {
 		throw new ORPCError("FORBIDDEN", {
-			message: "That is not your account to pause.",
+			message: "You can only put your own account on a break.",
 		});
 	}
 	return userId;
@@ -63,7 +67,9 @@ function targetOf(context: Context, userId: string | undefined): string {
 async function requirePerson(db: Context["db"], userId: string) {
 	const state = await findPersonState(db, userId);
 	if (!state)
-		throw new ORPCError("NOT_FOUND", { message: "Nobody by that id." });
+		throw new ORPCError("NOT_FOUND", {
+			message: "That player could not be found.",
+		});
 	return state;
 }
 
@@ -129,8 +135,8 @@ export const peopleRouter = {
 	/**
 	 * Everybody, with the record of how they have answered the last few calls
 	 * to play hung off each row. Admin only, like the rest of `list`: how
-	 * often a man ignores his email is not something the roster page tells
-	 * the other players about him.
+	 * often someone misses their email is not something the roster page tells
+	 * the other players about them.
 	 */
 	list: adminProcedure.handler(async ({ context }) => {
 		const [people, rates] = await Promise.all([
@@ -145,7 +151,7 @@ export const peopleRouter = {
 
 	/**
 	 * The roster, for players rather than admins: who is in the group and how
-	 * many Mondays they have actually turned up for. Deliberately thinner than
+	 * many nights they have actually turned up for. Deliberately thinner than
 	 * `list` -- no addresses, no tokens, no reason for somebody's break -- so
 	 * that being a player does not hand you the mailing list.
 	 *
@@ -217,7 +223,7 @@ export const peopleRouter = {
 			} catch (error) {
 				if (error instanceof APIError) {
 					throw new ORPCError("CONFLICT", {
-						message: "That address is already on the list.",
+						message: "That email address is already in the group.",
 					});
 				}
 				throw error;
@@ -238,17 +244,19 @@ export const peopleRouter = {
 			const people = await listPeople(context.db);
 			const row = people.find((p) => p.id === input.userId);
 			if (!row) {
-				throw new ORPCError("NOT_FOUND", { message: "Nobody by that id." });
+				throw new ORPCError("NOT_FOUND", {
+					message: "That player could not be found.",
+				});
 			}
 			if (row.status === "deactivated") {
 				throw new ORPCError("BAD_REQUEST", {
-					message: "They are deactivated. Reactivate them first.",
+					message: "This player is deactivated. Reactivate them first.",
 				});
 			}
 			const outcome = await sendWelcome(context.db, row.id, row);
 			if (!outcome.ok) {
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: `Brevo said no: ${outcome.error}`,
+					message: `The email could not be sent: ${outcome.error}`,
 				});
 			}
 			return { ok: true, dryRun: getMailer().dryRun };
@@ -265,14 +273,15 @@ export const peopleRouter = {
 			const state = await requirePerson(context.db, input.userId);
 			if (state.status === "deactivated") {
 				throw new ORPCError("BAD_REQUEST", {
-					message: "They are deactivated. Their links are already dead.",
+					message:
+						"This player is deactivated, so their links already do not work.",
 				});
 			}
 			await rotateLinkToken(context.db, state.id);
 			const outcome = await sendWelcome(context.db, state.id, state);
 			if (!outcome.ok) {
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: `Old link is dead. New one did not send: ${outcome.error}`,
+					message: `The old link no longer works, but the new one could not be sent: ${outcome.error}`,
 				});
 			}
 			return { ok: true, dryRun: getMailer().dryRun };
@@ -288,7 +297,7 @@ export const peopleRouter = {
 		.handler(async ({ context, input }) => {
 			if (input.userId === context.session.user.id) {
 				throw new ORPCError("BAD_REQUEST", {
-					message: "Find another admin to do that to you.",
+					message: "You can't deactivate your own account. Ask another admin.",
 				});
 			}
 			await requirePerson(context.db, input.userId);
@@ -307,7 +316,7 @@ export const peopleRouter = {
 			const state = await requirePerson(context.db, input.userId);
 			if (state.status !== "deactivated") {
 				throw new ORPCError("BAD_REQUEST", {
-					message: "They are not deactivated.",
+					message: "This player is not deactivated.",
 				});
 			}
 			await reactivate(context.db, input.userId);

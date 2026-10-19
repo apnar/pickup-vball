@@ -11,8 +11,8 @@ import { user } from "./auth";
 import { game } from "./game";
 
 /**
- * What somebody said. `maybe` is the game-time decision this run has always
- * had informally: it keeps you on the emails and counts toward nothing.
+ * What somebody said. `maybe` is the day-of decision people have always
+ * made informally: it keeps you on the emails and counts toward nothing.
  */
 export const RSVP_RESPONSES = ["in", "maybe", "out"] as const;
 export type RsvpResponse = (typeof RSVP_RESPONSES)[number];
@@ -39,7 +39,7 @@ export const rsvp = sqliteTable(
 		}),
 		/**
 		 * Who typed this name in. Load-bearing twice over: it decides who may
-		 * change a guest's answer, and when a run is called off it is the only
+		 * change a guest's answer, and when a night is called off it is the only
 		 * way to reach a guest at all -- guests have no inbox, so we tell the
 		 * person who put them on the sheet and let them pass it on.
 		 * Null on rows that predate the column; nobody knows who added those.

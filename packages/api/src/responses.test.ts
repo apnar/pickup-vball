@@ -18,18 +18,18 @@ describe("tallyResponses", () => {
 	it("counts in, any answer, and breaks against the asks that person got", () => {
 		const rates = tallyResponses(
 			[
-				invite("g1", "u-sean"),
-				invite("g2", "u-sean"),
-				invite("g3", "u-sean", true),
-				invite("g1", "u-dana"),
+				invite("g1", "u-ana"),
+				invite("g2", "u-ana"),
+				invite("g3", "u-ana", true),
+				invite("g1", "u-beth"),
 			],
 			[
-				answer("g1", "u-sean"),
-				answer("g2", "u-sean", "out"),
-				answer("g1", "u-dana", "maybe"),
+				answer("g1", "u-ana"),
+				answer("g2", "u-ana", "out"),
+				answer("g1", "u-beth", "maybe"),
 			],
 		);
-		expect(rates.get("u-sean")).toEqual({
+		expect(rates.get("u-ana")).toEqual({
 			of: 3,
 			yes: 1,
 			replied: 2,
@@ -37,7 +37,7 @@ describe("tallyResponses", () => {
 		});
 		// Out and maybe are answers. Somebody who says maybe every week is
 		// responsive, whatever else he is.
-		expect(rates.get("u-dana")).toEqual({
+		expect(rates.get("u-beth")).toEqual({
 			of: 1,
 			yes: 0,
 			replied: 1,
@@ -56,14 +56,14 @@ describe("tallyResponses", () => {
 		expect(rates.get("u-new")?.of).toBe(1);
 	});
 
-	it("ignores an answer to a run this person was never invited to", () => {
-		// Somebody deactivated after the fact, or a row left by a game whose
+	it("ignores an answer to a night this person was never invited to", () => {
+		// Somebody deactivated after the fact, or a row left by a night whose
 		// call never went out. Neither is a record anybody should carry.
 		const rates = tallyResponses(
-			[invite("g1", "u-sean")],
-			[answer("g1", "u-sean"), answer("g9", "u-sean")],
+			[invite("g1", "u-ana")],
+			[answer("g1", "u-ana"), answer("g9", "u-ana")],
 		);
-		expect(rates.get("u-sean")).toEqual({
+		expect(rates.get("u-ana")).toEqual({
 			of: 1,
 			yes: 1,
 			replied: 1,
@@ -72,21 +72,21 @@ describe("tallyResponses", () => {
 	});
 
 	it("has nothing to say about somebody nobody has asked", () => {
-		expect(tallyResponses([], [answer("g1", "u-sean")]).size).toBe(0);
+		expect(tallyResponses([], [answer("g1", "u-ana")]).size).toBe(0);
 		expect(NO_RESPONSES).toEqual({ of: 0, yes: 0, replied: 0, onBreak: 0 });
 	});
 
 	it("does not let one person's break count against another", () => {
 		const rates = tallyResponses(
-			[invite("g1", "u-sean", true), invite("g1", "u-dana")],
-			[answer("g1", "u-dana")],
+			[invite("g1", "u-ana", true), invite("g1", "u-beth")],
+			[answer("g1", "u-beth")],
 		);
-		expect(rates.get("u-sean")).toEqual({
+		expect(rates.get("u-ana")).toEqual({
 			of: 1,
 			yes: 0,
 			replied: 0,
 			onBreak: 1,
 		});
-		expect(rates.get("u-dana")?.onBreak).toBe(0);
+		expect(rates.get("u-beth")?.onBreak).toBe(0);
 	});
 });

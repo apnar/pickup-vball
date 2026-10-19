@@ -1,51 +1,111 @@
 import type { Headcount } from "@pickup-vball/api/routers/rsvp";
-import { buttonVariants } from "@pickup-vball/ui/components/button";
+
+import { clockLabel } from "@/components/rsvp-status";
+
+type Game = Headcount["game"];
 
 /**
- * Where and when, plus how to get in the door. Shown on the board and on the
- * page a cycle email lands on -- somebody who just tapped "I'm in" from their
- * driveway wants the address more than anything else on the screen.
+ * "2026-10-20" -> TUE / 20 / OCT, for the date block on a night's card. Read
+ * as UTC noon: the string already is the gym's calendar day, and reading it
+ * in the browser's zone could land it on the day before.
  */
-export function GameFacts({ game }: { game: Headcount["game"] }) {
+export function dateParts(date: string) {
+	const d = new Date(`${date}T12:00:00Z`);
+	const part = (o: Intl.DateTimeFormatOptions) =>
+		new Intl.DateTimeFormat("en-US", { timeZone: "UTC", ...o }).format(d);
+	return {
+		day: part({ weekday: "short" }).toUpperCase(),
+		num: part({ day: "numeric" }),
+		mon: part({ month: "short" }).toUpperCase(),
+		long: part({
+			weekday: "long",
+			month: "short",
+			day: "numeric",
+		}).toUpperCase(),
+	};
+}
+
+/** A maps search for the address, which is what every phone knows how to open. */
+export function directionsUrl(game: Game): string {
+	const q = game.gym.address
+		? `${game.gym.name}, ${game.gym.address}`
+		: game.gym.name;
+	return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+}
+
+const icon = {
+	width: 22,
+	height: 22,
+	viewBox: "0 0 24 24",
+	fill: "none",
+	stroke: "currentColor",
+	strokeWidth: 2,
+	strokeLinecap: "round",
+	strokeLinejoin: "round",
+	className: "mt-0.5 shrink-0 text-subtle",
+} as const;
+
+/**
+ * When and where, plus how to get in the door. Shown on the home page and on
+ * the page a cycle email lands on -- somebody who just tapped "I'm in" from
+ * the car wants the address more than anything else on the screen.
+ */
+export function GameFacts({ game }: { game: Game }) {
+	const closes = game.cycle.stages.find((s) => s.key === "final")?.at ?? null;
+	const open = game.status !== "canceled" && !game.decidedAt;
 	return (
-		<>
-			<div className="mb-8 flex flex-wrap items-center gap-x-8 gap-y-3">
-				<span className="font-heading font-semibold text-[32px] uppercase leading-9 tracking-[0.02em]">
-					{game.dateLabel}
-				</span>
-				<span className="font-heading font-semibold text-[22px] leading-6 tracking-[0.02em]">
-					{game.timeLabel}
-				</span>
-				<span className="text-[15px] text-neutral-700 leading-6">
-					{game.gym.name}
-				</span>
-				{game.permit ? (
-					<a
-						href={`/api/permits/${game.permit.id}/file`}
-						target="_blank"
-						rel="noreferrer"
-						className={buttonVariants({
-							variant: "outline",
-							size: "sm",
-							className: "no-underline",
-						})}
-					>
-						Permit (PDF)
-					</a>
-				) : (
-					<span className="kicker text-neutral-600">No permit attached</span>
-				)}
-			</div>
-			{game.gym.address || game.gym.notes || game.notes ? (
-				<div className="-mt-4 mb-8 max-w-[60ch] space-y-1 text-[15px] text-neutral-700 leading-6">
-					{game.gym.address ? (
-						<p className="text-ink">{game.gym.address}</p>
+		<div className="flex flex-col rounded-card bg-surface">
+			<div className="flex items-start gap-3.5 border-raised border-b px-[18px] py-4">
+				<svg {...icon} aria-hidden="true">
+					<circle cx="12" cy="12" r="9" />
+					<path d="M12 7v5l3 2" />
+				</svg>
+				<div className="flex flex-col">
+					<span className="font-semibold">{game.timeLabel}</span>
+					{closes && open ? (
+						<span className="text-[14px] text-subtle">
+							RSVP closes {clockLabel(closes)}
+						</span>
 					) : null}
-					{/* How to get in, kept on the gym so it is right every week. */}
-					{game.gym.notes ? <p>{game.gym.notes}</p> : null}
-					{game.notes ? <p>{game.notes}</p> : null}
+				</div>
+			</div>
+			<div className="flex items-start gap-3.5 px-[18px] py-4">
+				<svg {...icon} aria-hidden="true">
+					<path d="M12 21s-7-6.5-7-12a7 7 0 0 1 14 0c0 5.5-7 12-7 12z" />
+					<circle cx="12" cy="9" r="2.5" />
+				</svg>
+				<div className="flex min-w-0 flex-1 flex-col">
+					<span className="font-semibold">{game.gym.name}</span>
+					{game.gym.address ? (
+						<span className="text-[14px] text-subtle">{game.gym.address}</span>
+					) : null}
+				</div>
+				<a
+					href={directionsUrl(game)}
+					target="_blank"
+					rel="noreferrer"
+					className="flex min-h-11 items-center font-semibold text-[14px]"
+				>
+					Directions
+				</a>
+			</div>
+			{/* How to get in, kept on the gym so it is right every week. */}
+			{game.gym.notes || game.notes || game.permit ? (
+				<div className="flex flex-col gap-1.5 border-raised border-t px-[18px] py-4 text-[14px] text-ink-soft">
+					{game.gym.notes ? <p className="m-0">{game.gym.notes}</p> : null}
+					{game.notes ? <p className="m-0">{game.notes}</p> : null}
+					{game.permit ? (
+						<a
+							href={`/api/permits/${game.permit.id}/file`}
+							target="_blank"
+							rel="noreferrer"
+							className="font-semibold"
+						>
+							Gym permit (PDF)
+						</a>
+					) : null}
 				</div>
 			) : null}
-		</>
+		</div>
 	);
 }

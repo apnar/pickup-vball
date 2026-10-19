@@ -9,7 +9,7 @@ import { CLOCK_STAGES } from "./cycle";
 import {
 	addDays,
 	formatGameDate,
-	formatGameTime,
+	formatTimeRange,
 	runInstant,
 	todayInRunTimezone,
 } from "./run";
@@ -83,9 +83,7 @@ export function decorateGame(row: GameRow) {
 			})),
 		},
 		dateLabel: formatGameDate(row.date),
-		timeLabel: row.endTime
-			? `${formatGameTime(row.startTime)} - ${formatGameTime(row.endTime)}`
-			: formatGameTime(row.startTime),
+		timeLabel: formatTimeRange(row.startTime, row.endTime),
 		isPast: row.date < todayInRunTimezone(),
 	};
 }

@@ -1,12 +1,15 @@
-import { Blueprint } from "@pickup-vball/ui/components/blueprint";
-import { Button } from "@pickup-vball/ui/components/button";
+import { CAPACITY } from "@pickup-vball/api/run";
+import { Button, buttonVariants } from "@pickup-vball/ui/components/button";
 import { Input } from "@pickup-vball/ui/components/input";
 import { Label } from "@pickup-vball/ui/components/label";
+import { Panel } from "@pickup-vball/ui/components/panel";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import PageTitle from "@/components/page-title";
+import SectionKicker from "@/components/section-kicker";
 import { DEFAULT_END_TIME, DEFAULT_START_TIME } from "@/content/run";
 import { orpc } from "@/utils/orpc";
 
@@ -15,7 +18,13 @@ export const Route = createFileRoute("/_admin/admin/")({
 });
 
 const selectClass =
-	"min-h-9 w-full min-w-0 rounded-none border border-divider bg-surface px-2.5 py-1.5 font-sans text-ink text-sm outline-none hover:border-ink/45 focus-visible:border-steel";
+	"min-h-12 w-full min-w-0 rounded-field border-[1.5px] border-line bg-deep px-3 font-sans text-[17px] text-ink outline-none hover:border-subtle focus-visible:border-amber";
+
+const fieldClass = "flex flex-col gap-1.5";
+const hintClass = "m-0 text-[14px] text-subtle leading-5";
+
+/** The form's anchor, so "+ New night" and "Edit" can both bring it into view. */
+const FORM_ID = "book-night";
 
 type FormState = {
 	date: string;
@@ -48,7 +57,7 @@ function AdminGamesPage() {
 	const refresh = () => {
 		queryClient.invalidateQueries({ queryKey: orpc.games.key() });
 		queryClient.invalidateQueries({ queryKey: orpc.rsvp.key() });
-		// Booking moves "last booked", which is what the Court dropdown
+		// Booking moves "last booked", which is what the Gym dropdown
 		// defaults to next time.
 		queryClient.invalidateQueries({ queryKey: orpc.gyms.key() });
 	};
@@ -57,7 +66,7 @@ function AdminGamesPage() {
 	const create = useMutation(
 		orpc.games.create.mutationOptions({
 			onSuccess: () => {
-				toast.success("Game booked.");
+				toast.success("Night booked.");
 				setForm(emptyForm);
 				refresh();
 			},
@@ -67,7 +76,7 @@ function AdminGamesPage() {
 	const update = useMutation(
 		orpc.games.update.mutationOptions({
 			onSuccess: () => {
-				toast.success("Game updated.");
+				toast.success("Night updated.");
 				setForm(emptyForm);
 				setEditingId(null);
 				refresh();
@@ -78,7 +87,7 @@ function AdminGamesPage() {
 	const remove = useMutation(
 		orpc.games.remove.mutationOptions({
 			onSuccess: () => {
-				toast.success("Game removed.");
+				toast.success("Night removed.");
 				setConfirmId(null);
 				refresh();
 			},
@@ -93,10 +102,10 @@ function AdminGamesPage() {
 	/** Only once we have actually asked: an empty list mid-flight is not news. */
 	const noGyms = !gyms.isPending && gymList.length === 0;
 	/**
-	 * The court we booked most recently, which is nearly always the next one
+	 * The gym we booked most recently, which is nearly always the next one
 	 * too. Derived rather than written into the form state on load: it then
 	 * follows the data by itself, so booking somewhere new makes that gym the
-	 * default for the game after it, with no effect to keep in step.
+	 * default for the night after it, with no effect to keep in step.
 	 */
 	const lastUsedGymId =
 		gymList
@@ -136,21 +145,154 @@ function AdminGamesPage() {
 		}
 	};
 
-	const allGames = [
-		...(games.data?.upcoming ?? []),
-		...(games.data?.past ?? []),
-	];
+	const upcoming = games.data?.upcoming ?? [];
+	const past = games.data?.past ?? [];
+	type Night = (typeof upcoming)[number];
 	const busy = create.isPending || update.isPending || gymList.length === 0;
 
+	/*
+	 * The form sits below the list of nights, so an Edit tapped on a card
+	 * further up would otherwise fill in a form the admin cannot see.
+	 */
+	const showForm = () =>
+		document.getElementById(FORM_ID)?.scrollIntoView({ block: "start" });
+
+	const startEdit = (g: Night) => {
+		setEditingId(g.id);
+		setForm({
+			date: g.date,
+			startTime: g.startTime,
+			endTime: g.endTime ?? "",
+			gymId: g.gym.id,
+			notes: g.notes ?? "",
+			permitId: g.permit?.id ?? "",
+		});
+		showForm();
+	};
+
+	const deleteButton = (g: Night, size: "sm" | "xs") => (
+		<Button
+			variant={confirmId === g.id ? "destructive" : "outline"}
+			size={size}
+			disabled={remove.isPending}
+			onClick={() => {
+				if (confirmId === g.id) {
+					remove.mutate({ id: g.id });
+				} else {
+					setConfirmId(g.id);
+				}
+			}}
+		>
+			{confirmId === g.id ? "Yes, delete" : "Delete"}
+		</Button>
+	);
+
 	return (
-		<div className="grid grid-cols-1 gap-10 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-			<Blueprint className="p-6">
-				<span className="kicker mb-3 block text-steel-700">
-					{editingId ? "Edit game" : "Book a game"}
-				</span>
-				<form onSubmit={submit} className="space-y-4">
-					<div className="grid grid-cols-2 gap-3">
-						<div className="space-y-1.5">
+		<section>
+			<div className="flex flex-wrap items-end justify-between gap-4">
+				<PageTitle
+					title="Nights"
+					sub="Book a night at one of the gyms and see how many people are in."
+				/>
+				<a
+					href={`#${FORM_ID}`}
+					className={buttonVariants()}
+					onClick={() => {
+						// "New" means new: leave any half-finished edit behind.
+						if (editingId) {
+							setEditingId(null);
+							setForm(emptyForm);
+						}
+					}}
+				>
+					+ New night
+				</a>
+			</div>
+
+			<div className="mt-8">
+				<SectionKicker>Upcoming</SectionKicker>
+				{upcoming.length === 0 ? (
+					<p className="m-0 text-subtle">
+						{past.length === 0
+							? "No nights booked yet."
+							: "No upcoming nights. Book the next one below."}
+					</p>
+				) : (
+					<ul className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(min(260px,100%),1fr))] gap-4 p-0">
+						{upcoming.map((g) => {
+							const filled = Math.min(g.inCount, CAPACITY);
+							const left = CAPACITY - filled;
+							return (
+								<li key={g.id}>
+									<Panel
+										className={`flex h-full flex-col gap-3.5 ${editingId === g.id ? "ring-[1.5px] ring-amber" : ""}`}
+									>
+										<div className="flex flex-col gap-1">
+											<span className="display text-[28px]">{g.dateLabel}</span>
+											<span className="tnum text-[15px] text-ink-soft">
+												{g.timeLabel}
+											</span>
+											<span className="text-[14px] text-subtle">
+												{g.gym.name}
+											</span>
+										</div>
+										<div className="flex flex-col gap-2">
+											<div className="flex items-baseline justify-between gap-3 text-[14px]">
+												<span>
+													<strong className="tnum font-extrabold font-heading text-[24px] text-amber">
+														{g.inCount}
+													</strong>{" "}
+													in
+												</span>
+												<span className="tnum text-subtle">
+													{left === 0 ? "Full" : `${left} spots left`}
+												</span>
+											</div>
+											<div className="meter">
+												<span
+													style={{ width: `${(filled / CAPACITY) * 100}%` }}
+												/>
+											</div>
+										</div>
+										<div className="flex flex-wrap gap-2">
+											{g.permit ? (
+												<span className="rounded-full bg-raised px-2.5 py-0.5 font-semibold text-[13px] text-ink-soft">
+													Permit: {g.permit.label}
+												</span>
+											) : (
+												<span className="rounded-full bg-warn-bg px-2.5 py-0.5 font-semibold text-[13px] text-warn">
+													No permit yet
+												</span>
+											)}
+										</div>
+										{g.notes ? (
+											<p className="m-0 text-[14px] text-ink-soft">{g.notes}</p>
+										) : null}
+										<div className="mt-auto flex flex-wrap gap-2">
+											<Button
+												variant="outline"
+												size="sm"
+												onClick={() => startEdit(g)}
+											>
+												Edit
+											</Button>
+											{deleteButton(g, "sm")}
+										</div>
+									</Panel>
+								</li>
+							);
+						})}
+					</ul>
+				)}
+			</div>
+
+			<Panel id={FORM_ID} className="mt-8 scroll-mt-6">
+				<SectionKicker>
+					{editingId ? "Edit night" : "Book a night"}
+				</SectionKicker>
+				<form onSubmit={submit} className="flex flex-col gap-4">
+					<div className="grid grid-cols-[repeat(auto-fit,minmax(min(160px,100%),1fr))] gap-3.5">
+						<div className={fieldClass}>
 							<Label htmlFor="date">Date</Label>
 							<Input
 								id="date"
@@ -160,8 +302,8 @@ function AdminGamesPage() {
 								onChange={(e) => set("date")(e.target.value)}
 							/>
 						</div>
-						<div className="space-y-1.5">
-							<Label htmlFor="startTime">Tip-off</Label>
+						<div className={fieldClass}>
+							<Label htmlFor="startTime">Start</Label>
 							<Input
 								id="startTime"
 								type="time"
@@ -170,8 +312,8 @@ function AdminGamesPage() {
 								onChange={(e) => set("startTime")(e.target.value)}
 							/>
 						</div>
-						<div className="space-y-1.5">
-							<Label htmlFor="endTime">Ends (optional)</Label>
+						<div className={fieldClass}>
+							<Label htmlFor="endTime">End (optional)</Label>
 							<Input
 								id="endTime"
 								type="time"
@@ -180,93 +322,96 @@ function AdminGamesPage() {
 							/>
 						</div>
 					</div>
-					<div className="space-y-1.5">
-						<Label htmlFor="gymId">Court</Label>
-						{noGyms ? (
-							<p className="text-[15px] text-neutral-700 leading-6">
-								No gyms yet.{" "}
-								<Link to="/admin/gyms">Add one on the Gyms tab</Link> and it
-								shows up here.
-							</p>
-						) : (
-							<>
-								<select
-									id="gymId"
-									className={selectClass}
-									required
-									value={gymId}
-									onChange={(e) => set("gymId")(e.target.value)}
-								>
-									{gymList.map((g) => (
-										<option key={g.id} value={g.id}>
-											{g.name}
-										</option>
-									))}
-								</select>
-								{!editingId && gymId === lastUsedGymId ? (
-									<p className="text-[13px] text-neutral-700 leading-5">
-										Where we played last. Change it if the county moved us.
-									</p>
-								) : null}
-							</>
-						)}
-					</div>
-					<div className="space-y-1.5">
-						<Label htmlFor="permitId">Permit</Label>
-						<select
-							id="permitId"
-							className={selectClass}
-							value={form.permitId}
-							onChange={(e) => set("permitId")(e.target.value)}
-						>
-							<option value="">No permit yet</option>
-							{/* Every permit stays pickable -- coverage is what the paper
-							    says, and the paper is occasionally wrong -- but the ones
-							    that rent this court are the ones you want. */}
-							{covering.length > 0 && elsewhere.length > 0 ? (
-								<>
-									<optgroup label="Covers this court">
-										{covering.map((p) => (
-											<option key={p.id} value={p.id}>
-												{p.label} · {p.fileName}
-											</option>
-										))}
-									</optgroup>
-									<optgroup label="Other permits">
-										{elsewhere.map((p) => (
-											<option key={p.id} value={p.id}>
-												{p.label} · {p.fileName}
-											</option>
-										))}
-									</optgroup>
-								</>
+					<div className="grid grid-cols-[repeat(auto-fit,minmax(min(240px,100%),1fr))] gap-3.5">
+						<div className={fieldClass}>
+							<Label htmlFor="gymId">Gym</Label>
+							{noGyms ? (
+								<p className="m-0 text-ink-soft">
+									No gyms yet.{" "}
+									<Link to="/admin/gyms">Add one on the Gyms page</Link> and it
+									will show up here.
+								</p>
 							) : (
-								permitList.map((p) => (
-									<option key={p.id} value={p.id}>
-										{p.label} · {p.fileName}
-									</option>
-								))
+								<>
+									<select
+										id="gymId"
+										className={selectClass}
+										required
+										value={gymId}
+										onChange={(e) => set("gymId")(e.target.value)}
+									>
+										{gymList.map((g) => (
+											<option key={g.id} value={g.id}>
+												{g.name}
+											</option>
+										))}
+									</select>
+									{!editingId && gymId === lastUsedGymId ? (
+										<p className={hintClass}>
+											The gym you booked most recently. Change it if this night
+											is somewhere else.
+										</p>
+									) : null}
+								</>
 							)}
-						</select>
+						</div>
+						<div className={fieldClass}>
+							<Label htmlFor="permitId">Permit</Label>
+							<select
+								id="permitId"
+								className={selectClass}
+								value={form.permitId}
+								onChange={(e) => set("permitId")(e.target.value)}
+							>
+								<option value="">No permit yet</option>
+								{/* Every permit stays pickable -- coverage is what the paper
+								    says, and the paper is occasionally wrong -- but the ones
+								    that rent this gym are the ones you want. */}
+								{covering.length > 0 && elsewhere.length > 0 ? (
+									<>
+										<optgroup label="Covers this gym">
+											{covering.map((p) => (
+												<option key={p.id} value={p.id}>
+													{p.label} · {p.fileName}
+												</option>
+											))}
+										</optgroup>
+										<optgroup label="Other permits">
+											{elsewhere.map((p) => (
+												<option key={p.id} value={p.id}>
+													{p.label} · {p.fileName}
+												</option>
+											))}
+										</optgroup>
+									</>
+								) : (
+									permitList.map((p) => (
+										<option key={p.id} value={p.id}>
+											{p.label} · {p.fileName}
+										</option>
+									))
+								)}
+							</select>
+						</div>
 					</div>
-					<div className="space-y-1.5">
+					<div className={fieldClass}>
 						<Label htmlFor="notes">Notes (optional)</Label>
 						<Input
 							id="notes"
 							maxLength={300}
-							placeholder="Side door is locked after 7:30."
+							placeholder="The side door is locked after 7:30."
 							value={form.notes}
 							onChange={(e) => set("notes")(e.target.value)}
 						/>
 					</div>
-					<div className="flex gap-2.5">
+					<div className="flex flex-wrap gap-2.5">
 						<Button type="submit" disabled={busy}>
-							{editingId ? "Save changes" : "Book it"}
+							{editingId ? "Save changes" : "Book night"}
 						</Button>
 						{editingId ? (
 							<Button
 								type="button"
-								variant="ghost"
+								variant="outline"
 								onClick={() => {
 									setEditingId(null);
 									setForm(emptyForm);
@@ -277,86 +422,60 @@ function AdminGamesPage() {
 						) : null}
 					</div>
 				</form>
-			</Blueprint>
+			</Panel>
 
-			<div>
-				<span className="kicker mb-3 block text-steel-700">All games</span>
-				{allGames.length === 0 ? (
-					<p className="text-[15px] text-neutral-700 leading-6">
-						Nothing booked yet.
-					</p>
-				) : (
-					<div className="overflow-x-auto">
-						<table className="w-full min-w-[560px] border-collapse text-sm">
+			{past.length > 0 ? (
+				<div className="mt-8">
+					<SectionKicker>Recent</SectionKicker>
+					<div className="overflow-x-auto rounded-card bg-surface">
+						<table className="w-full min-w-[640px] border-collapse text-[15px]">
 							<thead>
 								<tr>
-									{["Date", "Tip-off", "Court", "In", "Permit", ""].map(
-										(h, i) => (
-											<th
-												key={h || `col-${i}`}
-												className="border-divider border-b px-2 py-1.5 text-left font-medium text-[11px] text-ink/60 uppercase tracking-[0.08em]"
-											>
-												{h}
-											</th>
-										),
-									)}
+									{["Date", "Time", "Gym", "In", "Permit", ""].map((h, i) => (
+										<th
+											key={h || `col-${i}`}
+											scope="col"
+											className="px-4 py-3.5 text-left font-semibold text-[13px] text-subtle uppercase tracking-[0.08em]"
+										>
+											{h || <span className="sr-only">Actions</span>}
+										</th>
+									))}
 								</tr>
 							</thead>
 							<tbody>
-								{allGames.map((g) => (
+								{past.map((g) => (
 									<tr
 										key={g.id}
-										className={`border-ink/8 border-b [&>td]:px-2 [&>td]:py-2 ${g.isPast ? "text-neutral-600" : ""}`}
+										className="border-raised border-t text-ink-soft hover:bg-raised-hover [&>td]:px-4 [&>td]:py-3"
 									>
-										<td className="whitespace-nowrap font-heading font-semibold text-lg uppercase tracking-[0.02em]">
+										<td className="whitespace-nowrap font-semibold text-ink">
 											{g.dateLabel}
 										</td>
 										<td className="tnum whitespace-nowrap">{g.timeLabel}</td>
 										<td>{g.gym.name}</td>
 										<td className="tnum">{g.inCount}</td>
-										<td className="text-[13px]">
+										<td className="text-[14px]">
 											{g.permit ? g.permit.label : "None"}
 										</td>
 										<td className="whitespace-nowrap text-right">
-											<Button
-												variant="ghost"
-												size="xs"
-												onClick={() => {
-													setEditingId(g.id);
-													setForm({
-														date: g.date,
-														startTime: g.startTime,
-														endTime: g.endTime ?? "",
-														gymId: g.gym.id,
-														notes: g.notes ?? "",
-														permitId: g.permit?.id ?? "",
-													});
-												}}
-											>
-												Edit
-											</Button>
-											<Button
-												variant={confirmId === g.id ? "destructive" : "ghost"}
-												size="xs"
-												disabled={remove.isPending}
-												onClick={() => {
-													if (confirmId === g.id) {
-														remove.mutate({ id: g.id });
-													} else {
-														setConfirmId(g.id);
-													}
-												}}
-											>
-												{confirmId === g.id ? "Really delete" : "Delete"}
-											</Button>
+											<div className="flex justify-end gap-2">
+												<Button
+													variant="outline"
+													size="xs"
+													onClick={() => startEdit(g)}
+												>
+													Edit
+												</Button>
+												{deleteButton(g, "xs")}
+											</div>
 										</td>
 									</tr>
 								))}
 							</tbody>
 						</table>
 					</div>
-				)}
-			</div>
-		</div>
+				</div>
+			) : null}
+		</section>
 	);
 }

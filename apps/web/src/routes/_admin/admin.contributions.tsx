@@ -1,7 +1,7 @@
-import { Blueprint } from "@pickup-vball/ui/components/blueprint";
 import { Button } from "@pickup-vball/ui/components/button";
 import { Input } from "@pickup-vball/ui/components/input";
 import { Label } from "@pickup-vball/ui/components/label";
+import { Panel } from "@pickup-vball/ui/components/panel";
 import { Textarea } from "@pickup-vball/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -13,6 +13,8 @@ import {
 	PreviewPanel,
 	reportSend,
 } from "@/components/email-preview";
+import PageTitle from "@/components/page-title";
+import SectionKicker from "@/components/section-kicker";
 import { dollars } from "@/lib/contributions";
 import { orpc } from "@/utils/orpc";
 
@@ -21,17 +23,22 @@ export const Route = createFileRoute("/_admin/admin/contributions")({
 });
 
 const thClass =
-	"border-divider border-b px-2 py-1.5 text-left font-medium text-[11px] text-ink/60 uppercase tracking-[0.08em]";
+	"px-4 py-3.5 text-left font-semibold text-[13px] text-subtle uppercase tracking-[0.08em]";
 
-const chip = (tone: "steel" | "neutral" | "warn" | "gone") =>
-	`inline-flex items-center px-2.5 py-[3px] text-[11px] tracking-[0.02em] ${
-		tone === "steel"
-			? "bg-steel-100 text-steel-800"
+const pill = (tone: "ok" | "warn" | "neutral") =>
+	`inline-flex items-center rounded-full px-2.5 py-0.5 font-semibold text-[13px] ${
+		tone === "ok"
+			? "bg-ok-bg text-ok"
 			: tone === "warn"
-				? "bg-amber-100 text-amber-900"
-				: tone === "gone"
-					? "bg-neutral-200 text-neutral-700"
-					: "bg-neutral-100 text-neutral-800"
+				? "bg-warn-bg text-warn"
+				: "bg-raised text-ink-soft"
+	}`;
+
+const filterClass = (selected: boolean) =>
+	`min-h-11 cursor-pointer rounded-full border-[1.5px] px-[18px] font-semibold text-[15px] ${
+		selected
+			? "border-ink bg-ink text-ground"
+			: "border-line bg-transparent text-ink hover:bg-raised-hover"
 	}`;
 
 function when(value: Date | string | null | undefined): string {
@@ -53,8 +60,41 @@ type CallDraft = {
 	instructions: string;
 };
 
-/** The order the tracker reads in: who still owes, then the let-off, then the settled. */
+/** The order the ledger reads in: who still owes, then the excused, then the paid. */
 const STATUS_RANK = { unpaid: 0, excused: 1, paid: 2 } as const;
+
+const FILTERS = [
+	{ value: "all", label: "All" },
+	{ value: "unpaid", label: "Unpaid" },
+	{ value: "paid", label: "Paid" },
+	{ value: "excused", label: "Excused" },
+] as const;
+type Filter = (typeof FILTERS)[number]["value"];
+
+/** One number with its label, the tile row the ledger opens with. */
+function Tile({
+	label,
+	value,
+	note,
+	accent = false,
+}: {
+	label: string;
+	value: string;
+	note?: string;
+	accent?: boolean;
+}) {
+	return (
+		<div className="flex flex-col gap-1 rounded-card bg-surface p-[18px]">
+			<span className="kicker">{label}</span>
+			<span
+				className={`display tnum text-[40px] leading-none ${accent ? "text-amber" : "text-ink"}`}
+			>
+				{value}
+			</span>
+			{note ? <span className="text-[14px] text-subtle">{note}</span> : null}
+		</div>
+	);
+}
 
 function CallForm({
 	initial,
@@ -92,7 +132,7 @@ function CallForm({
 	const draft = (): CallDraft | null => {
 		const amount = Number(form.amount);
 		if (!Number.isInteger(amount) || amount <= 0) {
-			toast.error("How much? Whole dollars.");
+			toast.error("Enter an amount in whole dollars.");
 			return null;
 		}
 		return { ...form, amount };
@@ -103,16 +143,16 @@ function CallForm({
 	};
 
 	return (
-		<Blueprint className="p-6">
-			<span className="kicker mb-3 block text-steel-700">Put out a call</span>
+		<Panel className="flex flex-col gap-3.5">
+			<SectionKicker className="m-0">Ask the group to chip in</SectionKicker>
 			<form
-				className="space-y-4"
+				className="flex flex-col gap-4"
 				onSubmit={(e) => {
 					e.preventDefault();
 					withDraft(onPreview)();
 				}}
 			>
-				<div className="space-y-1.5">
+				<div className="flex flex-col gap-1.5">
 					<Label htmlFor="call-subject">Subject</Label>
 					<Input
 						id="call-subject"
@@ -122,20 +162,20 @@ function CallForm({
 						onChange={(e) => set("subject")(e.target.value)}
 					/>
 				</div>
-				<div className="space-y-1.5">
-					<Label htmlFor="call-body">Body</Label>
+				<div className="flex flex-col gap-1.5">
+					<Label htmlFor="call-body">Message</Label>
 					<Textarea
 						id="call-body"
 						required
 						maxLength={5000}
 						rows={8}
-						className="min-h-40 text-sm"
+						className="min-h-40"
 						value={form.body}
 						onChange={(e) => set("body")(e.target.value)}
 					/>
 				</div>
 				<div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,3fr)]">
-					<div className="space-y-1.5">
+					<div className="flex flex-col gap-1.5">
 						<Label htmlFor="call-amount">Amount</Label>
 						<Input
 							id="call-amount"
@@ -144,32 +184,31 @@ function CallForm({
 							min={1}
 							step={1}
 							inputMode="numeric"
-							placeholder="40"
 							value={form.amount}
 							onChange={(e) => set("amount")(e.target.value)}
 						/>
-						<p className="text-[12px] text-neutral-600 leading-5">
+						<p className="m-0 text-[14px] text-subtle">
 							Whole dollars, per person.
 						</p>
 					</div>
-					<div className="space-y-1.5">
+					<div className="flex flex-col gap-1.5">
 						<Label htmlFor="call-instructions">How to pay</Label>
 						<Input
 							id="call-instructions"
 							required
 							maxLength={200}
-							placeholder="Venmo @sean-runs-it. Cash at the door works, exact change or Sean keeps the difference."
+							placeholder="Venmo @Viroj7, or cash at the gym."
 							value={form.instructions}
 							onChange={(e) => set("instructions")(e.target.value)}
 						/>
-						<p className="text-[12px] text-neutral-600 leading-5">
-							One line. Written once; it comes back prefilled next time.
+						<p className="m-0 text-[14px] text-subtle">
+							One line. It's saved and filled in for next time.
 						</p>
 					</div>
 				</div>
-				<p className="text-[12px] text-neutral-600 leading-5">
-					Goes to everybody on the list ({count}). People on a break are not
-					billed.
+				<p className="m-0 text-[14px] text-subtle">
+					Goes to the {count} active {count === 1 ? "player" : "players"}.
+					People taking a break aren't asked.
 				</p>
 				<div className="flex flex-wrap gap-2">
 					<Button type="submit" variant="outline" size="sm" disabled={busy}>
@@ -191,11 +230,11 @@ function CallForm({
 						disabled={!canSend || busy}
 						onClick={armed ? withDraft(onSend) : onArm}
 					>
-						{armed ? `Really send to ${count}` : `Send it (${count})`}
+						{armed ? `Yes, send to ${count}` : `Send (${count})`}
 					</Button>
 				</div>
 			</form>
-		</Blueprint>
+		</Panel>
 	);
 }
 
@@ -227,38 +266,41 @@ function ReminderForm({
 	const [body, setBody] = useState(initial);
 	const owing = count + away;
 	return (
-		<Blueprint className="p-6">
-			<span className="kicker mb-3 block text-steel-700">
-				Remind the unpaid · {owing} still owe
-			</span>
+		<Panel className="flex flex-col gap-3.5">
+			<div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+				<SectionKicker className="m-0">Send a reminder</SectionKicker>
+				<span className="text-[14px] text-subtle">
+					<span className="tnum">{owing}</span> still unpaid
+				</span>
+			</div>
 			{owing === 0 ? (
-				<p className="m-0 text-[15px] text-neutral-700 leading-6">
-					Everybody has paid. Close the books.
+				<p className="m-0 text-ink-soft">
+					Everyone has paid. You can close this request.
 				</p>
 			) : (
 				<form
-					className="space-y-4"
+					className="flex flex-col gap-4"
 					onSubmit={(e) => {
 						e.preventDefault();
 						onPreview(body);
 					}}
 				>
-					<div className="space-y-1.5">
-						<Label htmlFor="reminder-body">Body</Label>
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="reminder-body">Message</Label>
 						<Textarea
 							id="reminder-body"
 							required
 							maxLength={5000}
 							rows={6}
-							className="min-h-32 text-sm"
+							className="min-h-32"
 							value={body}
 							onChange={(e) => setBody(e.target.value)}
 						/>
-						<p className="text-[12px] text-neutral-600 leading-5">
-							The amount and how to pay ride along from the call. Only the words
-							here change.
+						<p className="m-0 text-[14px] text-subtle">
+							The amount and how to pay come from the original request; only
+							this message changes.
 							{away > 0
-								? ` ${away} of the unpaid ${away === 1 ? "is" : "are"} on a break and will not get this.`
+								? ` ${away} of the unpaid ${away === 1 ? "is" : "are"} taking a break and won't get this.`
 								: ""}
 						</p>
 					</div>
@@ -282,17 +324,17 @@ function ReminderForm({
 							disabled={!canSend || busy || count === 0}
 							onClick={armed ? () => onSend(body) : onArm}
 						>
-							{armed ? `Really send to ${count}` : `Send it (${count})`}
+							{armed ? `Yes, send to ${count}` : `Send (${count})`}
 						</Button>
 						{lastRemindedAt ? (
-							<span className="text-[12px] text-neutral-600">
+							<span className="text-[14px] text-subtle">
 								Last reminder {when(lastRemindedAt)}
 							</span>
 						) : null}
 					</div>
 				</form>
 			)}
-		</Blueprint>
+		</Panel>
 	);
 }
 
@@ -306,6 +348,7 @@ function AdminContributionsPage() {
 		(Preview & { recipientCount: number; key: PreviewKey }) | null
 	>(null);
 	const [confirmKey, setConfirmKey] = useState<string | null>(null);
+	const [filter, setFilter] = useState<Filter>("all");
 
 	const onError = (error: Error) => toast.error(error.message);
 	const refresh = () => {
@@ -324,7 +367,7 @@ function AdminContributionsPage() {
 		orpc.contributions.sendCall.mutationOptions({
 			onSuccess: (result, input) => {
 				if (input.toSelf) {
-					toast.success("Sent to you. Go look.");
+					toast.success("Sent to you. Check your inbox.");
 				} else {
 					reportSend(result);
 					setPreview(null);
@@ -344,7 +387,7 @@ function AdminContributionsPage() {
 		orpc.contributions.sendReminder.mutationOptions({
 			onSuccess: (result, input) => {
 				if (input.toSelf) {
-					toast.success("Sent to you. Go look.");
+					toast.success("Sent to you. Check your inbox.");
 				} else {
 					reportSend(result);
 					setPreview(null);
@@ -360,7 +403,7 @@ function AdminContributionsPage() {
 	const close = useMutation(
 		orpc.contributions.close.mutationOptions({
 			onSuccess: () => {
-				toast.success("Books closed.");
+				toast.success("Request closed.");
 				setPreview(null);
 				refresh();
 			},
@@ -386,191 +429,248 @@ function AdminContributionsPage() {
 				return rank !== 0 ? rank : a.name.localeCompare(b.name);
 			})
 		: [];
+	const shown =
+		filter === "all" ? ledger : ledger.filter((row) => row.status === filter);
 
 	return (
-		<div className="space-y-12">
+		<div className="flex flex-col gap-8">
+			<PageTitle
+				title="Gym money"
+				sub="Ask the group to chip in for the gym, and keep track of who has paid."
+			/>
+
 			{status.data?.dryRun ? (
-				<p className="border border-amber-300 bg-amber-50 px-4 py-3 text-[13px] text-amber-900 leading-5">
-					BREVO_API_KEY is not set here, so emails are printed to the server log
-					instead of sent. Everything else works the same.
+				<p className="m-0 rounded-card bg-warn-bg p-4 text-warn">
+					BREVO_API_KEY isn't set here, so emails are printed to the server log
+					instead of being sent. Everything else works normally.
 				</p>
 			) : null}
 
-			<div className="grid grid-cols-1 gap-10 md:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
-				<div className="space-y-10">
-					{current.isLoading || !data ? (
-						<p className="text-[15px] text-neutral-700 leading-6">
-							Checking the books...
+			{current.isLoading || !data ? (
+				<p className="m-0 text-subtle">Loading…</p>
+			) : open ? (
+				<section aria-labelledby="open-call" className="flex flex-col gap-4">
+					<div className="flex flex-col gap-1.5">
+						<span className="kicker">
+							Open request · since {when(open.openedAt)}
+						</span>
+						<SectionKicker id="open-call" className="m-0">
+							{open.subject}
+						</SectionKicker>
+						<p className="m-0 text-[14px] text-subtle">
+							{dollars(open.amount)} per person · sent to{" "}
+							<span className="tnum">{open.sentTo}</span>
+							{open.failed > 0 ? `, ${open.failed} failed` : ""}
 						</p>
-					) : open ? (
-						<>
-							<Blueprint className="p-6">
-								<div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-									<span className="kicker text-steel-700">
-										Open call · opened {when(open.openedAt)}
-									</span>
-									<span className="text-[13px] text-neutral-700">
-										{dollars(open.amount)} each · sent to {open.sentTo}
-										{open.failed > 0 ? `, ${open.failed} failed` : ""}
-									</span>
-								</div>
-								<p className="m-0 font-heading font-semibold text-2xl uppercase leading-7 tracking-[0.02em]">
-									{open.subject}
-								</p>
-								<p className="tnum mt-2 mb-0 font-heading font-semibold text-[22px] text-steel-700 leading-7">
-									{open.tallyLine}
-								</p>
-								<div className="mt-5 overflow-x-auto">
-									<table className="w-full border-collapse text-sm">
-										<thead>
-											<tr>
-												{["Name", "Status", "Marked", ""].map((h, i) => (
-													<th key={h || `col-${i}`} className={thClass}>
-														{h}
-													</th>
-												))}
-											</tr>
-										</thead>
-										<tbody>
-											{ledger.map((row) => {
-												const gone = row.personStatus === "deactivated";
-												const away = row.personStatus === "suspended";
-												return (
-													<tr
-														key={row.userId}
-														className={`border-ink/8 border-b [&>td]:px-2 [&>td]:py-2 ${gone ? "text-neutral-500" : ""}`}
-													>
-														<td className="font-heading font-semibold text-lg uppercase leading-6 tracking-[0.02em]">
-															{row.name}
-															{gone ? (
-																<span className="kicker ml-2 text-[11px] text-neutral-500">
-																	gone
-																</span>
-															) : away ? (
-																<span className="kicker ml-2 text-[11px] text-amber-800">
-																	on a break
-																</span>
-															) : null}
-														</td>
-														<td>
-															<span
-																className={chip(
-																	row.status === "paid"
-																		? "steel"
-																		: row.status === "unpaid"
-																			? "warn"
-																			: "neutral",
-																)}
-															>
-																{row.status === "paid"
-																	? "Paid"
-																	: row.status === "unpaid"
-																		? `Owes ${dollars(open.amount)}`
-																		: "Excused"}
-															</span>
-														</td>
-														<td className="whitespace-nowrap text-[13px] text-neutral-700">
-															{when(row.markedAt)}
-														</td>
-														<td className="whitespace-nowrap text-right">
-															{row.status === "unpaid" ? (
-																<>
-																	<Button
-																		variant="ghost"
-																		size="xs"
-																		disabled={mark.isPending}
-																		onClick={() =>
-																			mark.mutate({
-																				userId: row.userId,
-																				status: "paid",
-																			})
-																		}
-																	>
-																		Paid
-																	</Button>
-																	<Button
-																		variant="ghost"
-																		size="xs"
-																		disabled={mark.isPending}
-																		onClick={() =>
-																			mark.mutate({
-																				userId: row.userId,
-																				status: "excused",
-																			})
-																		}
-																	>
-																		Excuse
-																	</Button>
-																</>
-															) : (
-																<Button
-																	variant="ghost"
-																	size="xs"
-																	disabled={mark.isPending}
-																	onClick={() =>
-																		mark.mutate({
-																			userId: row.userId,
-																			status: "unpaid",
-																		})
-																	}
-																>
-																	Not paid
-																</Button>
-															)}
-														</td>
-													</tr>
-												);
-											})}
-										</tbody>
-									</table>
-								</div>
-								<div className="mt-4 flex flex-wrap items-center gap-3 border-divider border-t pt-4">
-									<Button
-										variant={confirmKey === "close" ? "destructive" : "outline"}
-										size="sm"
-										disabled={close.isPending}
-										onClick={() => {
-											if (confirmKey === "close") close.mutate({});
-											else setConfirmKey("close");
-										}}
-									>
-										{confirmKey === "close"
-											? `Really close it${open.tally.unpaid > 0 ? `. ${open.tally.unpaid} still owe.` : "."}`
-											: "Close the books"}
-									</Button>
-									{confirmKey === "close" ? (
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={() => setConfirmKey(null)}
-										>
-											Never mind
-										</Button>
-									) : null}
-									<span className="text-[12px] text-neutral-600 leading-5">
-										Closing stops the reminders and the notice on everyone's
-										account page. The tally stays here.
-									</span>
-								</div>
-							</Blueprint>
+					</div>
 
-							<ReminderForm
-								key={open.id}
-								initial={data.defaults.reminderBody}
-								count={open.unpaidReachable}
-								away={open.unpaidAway}
-								lastRemindedAt={open.lastRemindedAt}
-								busy={busy}
-								canSend={preview?.key === "reminder"}
-								armed={confirmKey === "reminder"}
-								onPreview={(body) => previewReminder.mutate({ body })}
-								onSendToMe={(body) =>
-									sendReminder.mutate({ body, toSelf: true })
-								}
-								onArm={() => setConfirmKey("reminder")}
-								onSend={(body) => sendReminder.mutate({ body, toSelf: false })}
-							/>
-						</>
+					<div className="grid grid-cols-[repeat(auto-fit,minmax(min(180px,100%),1fr))] gap-3.5">
+						<Tile
+							label="Collected"
+							value={dollars(open.tally.collected)}
+							note={`of ${dollars(open.tally.expected)}`}
+							accent
+						/>
+						<Tile
+							label="Paid"
+							value={String(open.tally.paid)}
+							note={`of ${open.tally.billed}`}
+						/>
+						<Tile label="Unpaid" value={String(open.tally.unpaid)} />
+						{open.tally.excused > 0 ? (
+							<Tile label="Excused" value={String(open.tally.excused)} />
+						) : null}
+					</div>
+
+					<fieldset className="m-0 flex flex-wrap gap-2 border-0 p-0">
+						<legend className="sr-only">Show</legend>
+						{FILTERS.map((f) => (
+							<button
+								key={f.value}
+								type="button"
+								aria-pressed={filter === f.value}
+								className={filterClass(filter === f.value)}
+								onClick={() => setFilter(f.value)}
+							>
+								{f.label}
+							</button>
+						))}
+					</fieldset>
+
+					<div className="overflow-x-auto rounded-card bg-surface">
+						<table className="w-full min-w-[640px] border-collapse text-[15px]">
+							<thead>
+								<tr>
+									<th scope="col" className={thClass}>
+										Player
+									</th>
+									<th scope="col" className={thClass}>
+										Status
+									</th>
+									<th scope="col" className={thClass}>
+										Updated
+									</th>
+									<th scope="col" className={thClass}>
+										<span className="sr-only">Actions</span>
+									</th>
+								</tr>
+							</thead>
+							<tbody>
+								{shown.map((row) => {
+									const gone = row.personStatus === "deactivated";
+									const away = row.personStatus === "suspended";
+									return (
+										<tr
+											key={row.userId}
+											className="border-raised border-t hover:bg-raised-hover [&>td]:px-4 [&>td]:py-3"
+										>
+											<td
+												className={`font-semibold ${gone ? "text-subtle" : "text-ink"}`}
+											>
+												{row.name}
+												{gone ? (
+													<span className="ml-2 font-normal text-[13px] text-subtle">
+														Deactivated
+													</span>
+												) : away ? (
+													<span className="ml-2 font-normal text-[13px] text-warn">
+														Taking a break
+													</span>
+												) : null}
+											</td>
+											<td>
+												<span
+													className={pill(
+														row.status === "paid"
+															? "ok"
+															: row.status === "unpaid"
+																? "warn"
+																: "neutral",
+													)}
+												>
+													{row.status === "paid"
+														? "Paid"
+														: row.status === "unpaid"
+															? `Owes ${dollars(open.amount)}`
+															: "Excused"}
+												</span>
+											</td>
+											<td className="whitespace-nowrap text-[14px] text-subtle">
+												{when(row.markedAt)}
+											</td>
+											<td className="text-right">
+												<div className="flex flex-wrap justify-end gap-2">
+													{row.status === "unpaid" ? (
+														<>
+															<Button
+																variant="accent"
+																size="sm"
+																aria-label={`Mark ${row.name} paid`}
+																disabled={mark.isPending}
+																onClick={() =>
+																	mark.mutate({
+																		userId: row.userId,
+																		status: "paid",
+																	})
+																}
+															>
+																Mark paid
+															</Button>
+															<Button
+																variant="ghost"
+																size="sm"
+																aria-label={`Excuse ${row.name}`}
+																disabled={mark.isPending}
+																onClick={() =>
+																	mark.mutate({
+																		userId: row.userId,
+																		status: "excused",
+																	})
+																}
+															>
+																Excuse
+															</Button>
+														</>
+													) : (
+														<Button
+															variant="ghost"
+															size="sm"
+															aria-label={`Mark ${row.name} unpaid`}
+															disabled={mark.isPending}
+															onClick={() =>
+																mark.mutate({
+																	userId: row.userId,
+																	status: "unpaid",
+																})
+															}
+														>
+															Mark unpaid
+														</Button>
+													)}
+												</div>
+											</td>
+										</tr>
+									);
+								})}
+							</tbody>
+						</table>
+						{shown.length === 0 ? (
+							<p className="m-0 border-raised border-t px-4 py-4 text-subtle">
+								Nobody here.
+							</p>
+						) : null}
+					</div>
+
+					<div className="flex flex-wrap items-center gap-3">
+						<Button
+							variant={confirmKey === "close" ? "destructive" : "outline"}
+							size="sm"
+							disabled={close.isPending}
+							onClick={() => {
+								if (confirmKey === "close") close.mutate({});
+								else setConfirmKey("close");
+							}}
+						>
+							{confirmKey === "close"
+								? open.tally.unpaid > 0
+									? `Close anyway (${open.tally.unpaid} unpaid)`
+									: "Yes, close it"
+								: "Close this request"}
+						</Button>
+						{confirmKey === "close" ? (
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={() => setConfirmKey(null)}
+							>
+								Cancel
+							</Button>
+						) : null}
+						<span className="max-w-[56ch] text-[14px] text-subtle">
+							Closing stops reminders and removes the payment notice from
+							everyone's account page. The totals stay here.
+						</span>
+					</div>
+				</section>
+			) : null}
+
+			<div className="grid grid-cols-1 gap-8 md:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+				<div className="flex flex-col gap-8">
+					{!data ? null : open ? (
+						<ReminderForm
+							key={open.id}
+							initial={data.defaults.reminderBody}
+							count={open.unpaidReachable}
+							away={open.unpaidAway}
+							lastRemindedAt={open.lastRemindedAt}
+							busy={busy}
+							canSend={preview?.key === "reminder"}
+							armed={confirmKey === "reminder"}
+							onPreview={(body) => previewReminder.mutate({ body })}
+							onSendToMe={(body) => sendReminder.mutate({ body, toSelf: true })}
+							onArm={() => setConfirmKey("reminder")}
+							onSend={(body) => sendReminder.mutate({ body, toSelf: false })}
+						/>
 					) : (
 						<CallForm
 							key={current.dataUpdatedAt}
@@ -598,40 +698,58 @@ function AdminContributionsPage() {
 					{preview ? (
 						<PreviewPanel preview={preview} onClose={() => setPreview(null)} />
 					) : (
-						<Blueprint className="flex min-h-40 items-center justify-center p-6 text-center text-[15px] text-neutral-700 leading-6">
-							Preview an email and it shows up here.
-						</Blueprint>
+						<Panel
+							variant="outline"
+							className="flex min-h-40 items-center justify-center text-center text-subtle"
+						>
+							Preview an email to see it here.
+						</Panel>
 					)}
 				</div>
 			</div>
 
-			<div>
-				<span className="kicker mb-3 block text-steel-700">Past calls</span>
+			<section className="flex flex-col gap-3.5">
+				<SectionKicker className="m-0">Past requests</SectionKicker>
 				{(history.data ?? []).length === 0 ? (
-					<p className="text-[15px] text-neutral-700 leading-6">
-						No calls yet. Sean has been paying for it anyway.
-					</p>
+					<p className="m-0 text-subtle">No past requests yet.</p>
 				) : (
-					<ul className="m-0 list-none space-y-3 p-0">
-						{(history.data ?? []).map((row) => (
-							<li
-								key={row.id}
-								className="border-ink/8 border-b pb-3 text-sm leading-5"
-							>
-								<div className="flex flex-wrap items-baseline justify-between gap-x-3">
-									<span className="font-semibold">{row.subject}</span>
-									<span className="text-[12px] text-neutral-600">
-										{when(row.openedAt)} – {when(row.closedAt)}
-									</span>
-								</div>
-								<div className="tnum text-[13px] text-neutral-700">
-									{dollars(row.amount)} each · {row.tallyLine}
-								</div>
-							</li>
-						))}
-					</ul>
+					<div className="overflow-x-auto rounded-card bg-surface">
+						<table className="w-full min-w-[640px] border-collapse text-[15px]">
+							<thead>
+								<tr>
+									<th scope="col" className={thClass}>
+										Request
+									</th>
+									<th scope="col" className={thClass}>
+										Open
+									</th>
+									<th scope="col" className={thClass}>
+										Per person
+									</th>
+									<th scope="col" className={thClass}>
+										Result
+									</th>
+								</tr>
+							</thead>
+							<tbody>
+								{(history.data ?? []).map((row) => (
+									<tr
+										key={row.id}
+										className="border-raised border-t hover:bg-raised-hover [&>td]:px-4 [&>td]:py-3"
+									>
+										<td className="font-semibold text-ink">{row.subject}</td>
+										<td className="text-[14px] text-subtle">
+											{when(row.openedAt)} – {when(row.closedAt)}
+										</td>
+										<td className="tnum">{dollars(row.amount)}</td>
+										<td className="tnum text-ink-soft">{row.tallyLine}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
 				)}
-			</div>
+			</section>
 		</div>
 	);
 }

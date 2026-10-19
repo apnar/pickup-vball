@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { addDays, formatGameTime, runInstant, todayInRunTimezone } from "./run";
+import {
+	addDays,
+	formatGameTime,
+	formatTimeRange,
+	runInstant,
+	todayInRunTimezone,
+} from "./run";
 
 const iso = (date: string, time: string) =>
 	runInstant(date, time).toISOString();
@@ -13,7 +19,7 @@ describe("runInstant", () => {
 	});
 
 	it("survives the spring-forward weekend", () => {
-		// Clocks go forward Sunday 2026-03-08. The Monday game's call goes out
+		// Clocks go forward Sunday 2026-03-08. The call for the night on the 9th goes out
 		// Sunday evening at UTC-5... and the game itself is at UTC-4. One
 		// cycle, two offsets, which is the whole reason for the second pass.
 		expect(iso("2026-03-08", "17:00")).toBe("2026-03-08T21:00:00.000Z");
@@ -46,5 +52,17 @@ describe("addDays", () => {
 		// 2026-03-08 is 23 hours long in the gym's timezone. Still one day.
 		expect(addDays("2026-03-09", -1)).toBe("2026-03-08");
 		expect(addDays("2026-11-02", -1)).toBe("2026-11-01");
+	});
+});
+
+describe("formatTimeRange", () => {
+	it("says a shared PM once", () => {
+		expect(formatTimeRange("19:30", "22:00")).toBe("7:30 – 10:00 PM");
+	});
+	it("keeps both halves when the range crosses noon", () => {
+		expect(formatTimeRange("11:00", "13:00")).toBe("11:00 AM – 1:00 PM");
+	});
+	it("is just the start without an end", () => {
+		expect(formatTimeRange("19:30", null)).toBe("7:30 PM");
 	});
 });

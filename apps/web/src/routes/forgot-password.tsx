@@ -1,11 +1,12 @@
-import { Blueprint } from "@pickup-vball/ui/components/blueprint";
 import { Button } from "@pickup-vball/ui/components/button";
 import { Input } from "@pickup-vball/ui/components/input";
 import { Label } from "@pickup-vball/ui/components/label";
+import { Panel } from "@pickup-vball/ui/components/panel";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import PageTitle from "@/components/page-title";
 import { authClient } from "@/lib/auth-client";
 
 export const Route = createFileRoute("/forgot-password")({
@@ -26,27 +27,27 @@ function ForgotPasswordPage() {
 		});
 		setBusy(false);
 		if (result.error) {
-			toast.error(result.error.message || "Something went sideways.");
+			toast.error(result.error.message || "Something went wrong. Try again.");
 			return;
 		}
 		setSent(true);
 	};
 
 	return (
-		<section className="pt-18 pb-15">
-			<Blueprint className="mx-auto w-full max-w-md p-6">
-				<span className="kicker mb-3 block text-steel-700">Password</span>
-				<h1 className="mb-6 font-heading text-[32px] uppercase leading-9 tracking-[0.02em]">
-					Forgot it. Happens.
-				</h1>
+		<section className="mx-auto w-full max-w-md pt-8 pb-12 md:pt-10">
+			<PageTitle
+				title="Reset your password"
+				sub="We’ll email you a link to choose a new one."
+			/>
+			<Panel className="mt-6 flex flex-col gap-4">
 				{sent ? (
-					<p className="text-[15px] leading-6">
-						If that address is on file, a link is on its way. It works for an
-						hour. Check spam before you check with Sean.
+					<p role="status" className="m-0 text-ink-soft">
+						If that address has an account, a reset link is on its way. The link
+						works for one hour. If it doesn’t arrive, check your spam folder.
 					</p>
 				) : (
-					<form onSubmit={submit} className="space-y-4">
-						<div className="space-y-2">
+					<form onSubmit={submit} className="flex flex-col gap-4">
+						<div className="flex flex-col gap-1.5">
 							<Label htmlFor="email">Email</Label>
 							<Input
 								id="email"
@@ -62,12 +63,10 @@ function ForgotPasswordPage() {
 						</Button>
 					</form>
 				)}
-				<div className="mt-4">
-					<Link to="/login" className="text-[13px] text-steel-700 leading-6">
-						Back to sign in
-					</Link>
-				</div>
-			</Blueprint>
+			</Panel>
+			<Link to="/login" className="mt-4 flex min-h-11 items-center text-[14px]">
+				Back to sign in
+			</Link>
 		</section>
 	);
 }

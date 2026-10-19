@@ -25,7 +25,7 @@ const gameInput = z.object({
 export const gamesRouter = {
 	/**
 	 * The next game on or after today, or null when no gym is booked. Players
-	 * only: where and when the run is stays off the marketing site.
+	 * only: where and when the night is stays off the public pages.
 	 */
 	next: protectedProcedure.handler(({ context }) => findNextGame(context.db)),
 
@@ -50,7 +50,7 @@ export const gamesRouter = {
 			} catch (error) {
 				if (isUniqueViolation(error)) {
 					throw new ORPCError("CONFLICT", {
-						message: "There is already a game at that date and time.",
+						message: "There is already a night booked at that date and time.",
 					});
 				}
 				throw error;
@@ -64,7 +64,9 @@ export const gamesRouter = {
 			const { id, ...changes } = input;
 			const existing = await findGame(context.db, id);
 			if (!existing) {
-				throw new ORPCError("NOT_FOUND", { message: "No such game." });
+				throw new ORPCError("NOT_FOUND", {
+					message: "That night no longer exists.",
+				});
 			}
 			await context.db
 				.update(game)

@@ -4,7 +4,7 @@ import { type ContributionFacts, dollars, render } from "./contribution";
 export type ContributionReminderInput = ContributionFacts & { body: string };
 
 const TAIL =
-	"This one only went to the people who have not paid. It is a short list and you are on it.";
+	"This reminder only went to people whose payment has not been marked yet.";
 
 /**
  * The second ask, sent by hand to whoever is still on the unpaid side of the
@@ -17,14 +17,14 @@ export function contributionReminderEmail(
 ): Rendered {
 	return render({
 		...input,
-		subject: `Still owed: ${dollars(input.amount)} for the gym.`,
-		heading: "You have not paid.",
+		subject: `Reminder: ${dollars(input.amount)} for the gym`,
+		heading: "A quick reminder",
 		tail: TAIL,
 	});
 }
 
 /** Prefilled in the reminder box, and editable there. */
 export const CONTRIBUTION_REMINDER_BODY = [
-	"The call for gym money went out a while ago. Yours has not landed. Sean already covered it, so this is not the county asking. It is him.",
-	"Send it the way below and this is the last you hear of it.",
+	"This is a reminder about the gym money request that went out recently. Your share has not been marked as paid yet.",
+	"You can pay using the details below. If you have already paid, thank you, and sorry for the extra email.",
 ].join("\n\n");

@@ -4,40 +4,84 @@ import {
 	suspend,
 	unsuspend,
 } from "@pickup-vball/db/people";
-import { escapeHtml, layout } from "@pickup-vball/email";
+import { escapeHtml } from "@pickup-vball/email";
 import { getMailer } from "@pickup-vball/email/worker";
 import { Hono } from "hono";
 
-const CTA =
-	"display:inline-block; padding:12px 20px; background:#2f5f86; color:#ffffff; border:0; font-weight:700; font-size:15px; cursor:pointer;";
-const P = "margin:0 0 14px; font-size:16px; line-height:1.5;";
-const FIELD = "margin:0 0 14px;";
-const LABEL =
-	"display:block; margin:0 0 6px; font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:#4a6d8c;";
-const INPUT =
-	"width:100%; box-sizing:border-box; padding:10px; border:1px solid #d9d6cc; font-size:15px; font-family:inherit;";
-const CHOICE = "margin:0 0 6px; font-size:15px; line-height:1.5;";
+import { SITE_NAME } from "@/content/run";
+
+/*
+ * These pages are served straight from the Worker, outside the React app, so
+ * they carry the site's look in a style block of their own: the same tokens
+ * as packages/ui/src/styles/globals.css, written out by hand. Nothing loads
+ * from anywhere else -- the form has to work from a mail app's in-app browser
+ * with JavaScript off, and the fonts fall back to the system's when Barlow is
+ * not installed.
+ */
+const CSS = `
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #0E1726; color: #EEF2F7; font-family: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 17px; line-height: 1.5; }
+.wrap { max-width: 520px; margin: 0 auto; padding: 28px 16px 48px; }
+.brand { margin: 0 0 20px; font-family: "Barlow Condensed", "Arial Narrow", Arial, sans-serif; font-weight: 800; font-size: 24px; letter-spacing: 0.04em; text-transform: uppercase; color: #F2A93B; }
+.card { background: #16223A; border-radius: 16px; padding: 20px; }
+.kicker { margin: 0 0 6px; font-size: 13px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #A7B4C8; }
+h1 { margin: 0 0 12px; font-family: "Barlow Condensed", "Arial Narrow", Arial, sans-serif; font-weight: 800; font-size: 32px; line-height: 1.05; text-transform: uppercase; color: #EEF2F7; }
+p { margin: 0 0 14px; }
+.sub { color: #D3DCE8; }
+form { margin: 20px 0 0; }
+.field { margin: 0 0 18px; border: 0; padding: 0; min-width: 0; }
+legend.label { padding: 0; }
+.label { display: block; margin: 0 0 8px; font-size: 13px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #A7B4C8; }
+input[type="text"] { width: 100%; min-height: 48px; padding: 10px 14px; border: 1.5px solid #3A4C70; border-radius: 10px; background: #0A111D; color: #EEF2F7; font: inherit; }
+input[type="text"]::placeholder { color: #A7B4C8; }
+.choice { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; margin: 0 0 6px; border-radius: 10px; background: #121D31; cursor: pointer; }
+.choice:hover { background: #1C2A45; }
+.choice input { width: 20px; height: 20px; margin: 0; accent-color: #F2A93B; }
+button { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 22px; border: 0; border-radius: 12px; background: #F2A93B; color: #0E1726; font-family: "Barlow Condensed", "Arial Narrow", Arial, sans-serif; font-weight: 700; font-size: 18px; letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer; }
+button:hover { background: #F5B95A; }
+a { color: #F2A93B; }
+.back { margin: 20px 0 0; font-size: 15px; }
+:focus-visible { outline: 2px solid #F2A93B; outline-offset: 2px; }
+`;
 
 /** How long a break lasts. Weeks, because that is how injuries are measured. */
 const DURATIONS = [
 	{ value: "2", label: "Two weeks" },
 	{ value: "4", label: "Four weeks", checked: true },
 	{ value: "8", label: "Eight weeks" },
-	{ value: "0", label: "Until I say otherwise" },
+	{ value: "0", label: "Until I come back" },
 ] as const;
 
+/** `body` and `formHtml` are HTML: callers escape what they put in them. */
 function page(input: {
 	heading: string;
 	body: string;
 	formHtml?: string;
 	home: string;
 }) {
-	return layout({
-		title: input.heading,
-		kicker: "Your spot",
-		heading: input.heading,
-		bodyHtml: `<p style="${P}">${input.body}</p>${input.formHtml ?? ""}<p style="${P} color:#5f5f5f; font-size:14px;"><a href="${escapeHtml(input.home)}" style="color:#2f5f86;">Back to the site</a></p>`,
-	});
+	return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>${escapeHtml(input.heading)} | ${escapeHtml(SITE_NAME)}</title>
+<style>${CSS}</style>
+</head>
+<body>
+<main class="wrap">
+<p class="brand">${escapeHtml(SITE_NAME)}</p>
+<div class="card">
+<p class="kicker">Your spot</p>
+<h1>${escapeHtml(input.heading)}</h1>
+<p class="sub">${input.body}</p>
+${input.formHtml ?? ""}
+</div>
+<p class="back"><a href="${escapeHtml(input.home)}">Back to the site</a></p>
+</main>
+</body>
+</html>`;
 }
 
 function html(body: string, status: 200 | 404 = 200) {
@@ -67,8 +111,8 @@ function dateLabel(value: Date): string {
 
 /**
  * The footer link from list emails lands here. There is no unsubscribe that
- * leaves somebody on the roster any more: email is how this group talks, so
- * stepping away from the email is stepping away from the Mondays. This asks
+ * leaves somebody on the roster: email is how this group talks, so stepping
+ * away from the email is stepping away from the nights. This asks
  * for how long and why, and holds their spot until then.
  *
  * It has to work from a plain tap in a mail app with no JavaScript, which is
@@ -84,8 +128,8 @@ unsubscribe.get("/:token", async (c) => {
 	if (!person || person.status === "deactivated") {
 		return html(
 			page({
-				heading: "That link is not on the sheet.",
-				body: "It may have been for an address that is no longer with us. Nothing changed.",
+				heading: "This link is no longer valid.",
+				body: "It may belong to an account that is no longer active. Nothing has changed.",
 				home,
 			}),
 			404,
@@ -95,9 +139,9 @@ unsubscribe.get("/:token", async (c) => {
 	if (person.status === "suspended") {
 		return html(
 			page({
-				heading: "You're already taking a break.",
-				body: `${escapeHtml(person.email)} is off the game emails and off the sheet. Ready to come back?`,
-				formHtml: `<form method="post" action="/api/unsubscribe/${escapeHtml(token)}/back" style="margin:20px 0 6px;"><button type="submit" style="${CTA}">I'm back</button></form>`,
+				heading: "You're already on a break.",
+				body: `${escapeHtml(person.email)} is not getting emails about upcoming nights and is off the sheet. Ready to come back?`,
+				formHtml: `<form method="post" action="/api/unsubscribe/${escapeHtml(token)}/back"><button type="submit">I'm back</button></form>`,
 				home,
 			}),
 		);
@@ -105,17 +149,17 @@ unsubscribe.get("/:token", async (c) => {
 
 	const choices = DURATIONS.map(
 		(d) =>
-			`<p style="${CHOICE}"><label><input type="radio" name="weeks" value="${d.value}"${"checked" in d && d.checked ? " checked" : ""}> ${escapeHtml(d.label)}</label></p>`,
+			`<label class="choice"><input type="radio" name="weeks" value="${d.value}"${"checked" in d && d.checked ? " checked" : ""}> ${escapeHtml(d.label)}</label>`,
 	).join("");
 
 	return html(
 		page({
 			heading: "Taking a break?",
-			body: "No game emails and no spot on the sheet until you're back. Your account stays exactly where it is, and one tap puts you back on it.",
-			formHtml: `<form method="post" action="/api/unsubscribe/${escapeHtml(token)}" style="margin:20px 0 6px;">
-<div style="${FIELD}"><label style="${LABEL}" for="reason">What's up? (optional)</label><input style="${INPUT}" type="text" id="reason" name="reason" maxlength="200" placeholder="Torn calf, back in a month"></div>
-<div style="${FIELD}"><span style="${LABEL}">For how long</span>${choices}</div>
-<button type="submit" style="${CTA}">Hold my spot</button>
+			body: "While you are on a break you won't get emails about upcoming nights or have a spot on the sheet. Your account stays as it is, and one tap brings you back.",
+			formHtml: `<form method="post" action="/api/unsubscribe/${escapeHtml(token)}">
+<div class="field"><label class="label" for="reason">Reason (optional)</label><input type="text" id="reason" name="reason" maxlength="200" placeholder="Sprained ankle, back in a month"></div>
+<fieldset class="field"><legend class="label">How long</legend>${choices}</fieldset>
+<button type="submit">Start my break</button>
 </form>`,
 			home,
 		}),
@@ -133,7 +177,7 @@ unsubscribe.post("/:token", async (c) => {
 	const db = createDb();
 	const person = await findPersonByUnsubscribeToken(db, token);
 	if (!person || person.status === "deactivated") {
-		return c.text("Unknown token.", 404);
+		return c.text("This link is no longer valid.", 404);
 	}
 
 	let reason: string | undefined;
@@ -150,15 +194,15 @@ unsubscribe.post("/:token", async (c) => {
 
 	// One-click clients want a bare 200, not a page.
 	if (!c.req.header("accept")?.includes("text/html")) {
-		return c.text("Done. Your spot is held.", 200);
+		return c.text("Done. You are on a break.", 200);
 	}
 	return html(
 		page({
-			heading: until ? `See you ${dateLabel(until)}.` : "Spot held.",
+			heading: until ? `See you ${dateLabel(until)}.` : "You're on a break.",
 			body: until
-				? `${escapeHtml(person.email)} is off the game emails until then, and we'll put you back on the sheet automatically. Come back sooner if the calf holds.`
-				: `${escapeHtml(person.email)} is off the game emails until you say otherwise. No hard feelings; one tap puts you back on.`,
-			formHtml: `<form method="post" action="/api/unsubscribe/${escapeHtml(token)}/back" style="margin:20px 0 6px;"><button type="submit" style="${CTA}">Actually, I'm fine</button></form>`,
+				? `${escapeHtml(person.email)} won't get emails about upcoming nights until then, and you will be back on the list automatically. You can come back sooner at any time.`
+				: `${escapeHtml(person.email)} won't get emails about upcoming nights until you come back. One tap brings you back.`,
+			formHtml: `<form method="post" action="/api/unsubscribe/${escapeHtml(token)}/back"><button type="submit">Cancel my break</button></form>`,
 			home,
 		}),
 	);
@@ -170,7 +214,7 @@ unsubscribe.post("/:token/back", async (c) => {
 	const db = createDb();
 	const person = await findPersonByUnsubscribeToken(db, token);
 	if (!person || person.status === "deactivated") {
-		return c.text("Unknown token.", 404);
+		return c.text("This link is no longer valid.", 404);
 	}
 	await unsuspend(db, person.id);
 	// Brevo may have them blocklisted from a bounce or a mail-app unsubscribe;
@@ -178,8 +222,8 @@ unsubscribe.post("/:token/back", async (c) => {
 	await getMailer().unblock(person.email);
 	return html(
 		page({
-			heading: "You're back on.",
-			body: `${escapeHtml(person.email)} will get the Monday night emails again, and you're back on the sheet. The ball is still Sean's.`,
+			heading: "Welcome back.",
+			body: `${escapeHtml(person.email)} will get emails about upcoming nights again, and you can sign up for a spot.`,
 			home,
 		}),
 	);

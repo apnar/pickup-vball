@@ -342,12 +342,12 @@ export async function markLinkSent(db: Db, id: string): Promise<void> {
 }
 
 /**
- * Take somebody off the sheet for every game still ahead of them.
+ * Take somebody off the sheet for every night still ahead of them.
  *
- * Stepping away has to mean stepping off the headcount, or a torn calf on
- * Sunday night still counts toward Monday's ten, shows up in the In list of
- * every email, and gets none of them -- because none of those emails go to
- * anybody on a break.
+ * Stepping away has to mean stepping off the headcount, or someone who got
+ * hurt the night before still counts toward the next night's total, shows up
+ * in the In list of every email, and gets none of them -- because none of
+ * those emails go to anybody on a break.
  *
  * Dates are compared as YYYY-MM-DD strings against the gym's calendar day,
  * which is what `game.date` has always been.

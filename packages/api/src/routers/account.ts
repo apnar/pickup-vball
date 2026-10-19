@@ -29,7 +29,9 @@ export const accountRouter = {
 				// PASSWORD_TOO_SHORT, PASSWORD_ALREADY_SET and friends.
 				if (error instanceof APIError) {
 					throw new ORPCError("BAD_REQUEST", {
-						message: error.message || "That password did not take.",
+						message:
+							error.message ||
+							"That password could not be set. Please try again.",
 					});
 				}
 				throw error;

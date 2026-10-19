@@ -23,16 +23,17 @@ const site = "https://vball.moco-pickup.com";
 const facts: RsvpFacts = {
 	gameId: "g-1",
 	dateLabel: "Mon, Sep 14",
-	timeLabel: "9:00 PM - 10:30 PM",
+	timeLabel: "7:30 – 10:00 PM",
 	location: "Shady Grove <Middle> School",
 	notes: "Park by the side door & bring water",
 	siteUrl: site,
-	inNames: ["Sean", "Big Ray"],
+	inNames: ["Ana", "Marco"],
 	maybeNames: ["Pete"],
 	inCount: 7,
-	confirmAt: 10,
+	confirmAt: 12,
 	playAt: 8,
-	capacity: 15,
+	capacity: 18,
+	decideAt: "5:30 PM",
 };
 
 describe("the cycle emails", () => {
@@ -40,12 +41,12 @@ describe("the cycle emails", () => {
 	const nudge = rsvpNudgeEmail({ ...facts, needed: 3 });
 	const confirmed = rsvpConfirmedEmail({
 		...facts,
-		inCount: 10,
+		inCount: 12,
 		permitUrl: `${site}/api/permits/abc/file`,
 	});
 	const lastCall = rsvpLastCallEmail({
 		...facts,
-		needed: 2,
+		needed: 5,
 		wasConfirmed: false,
 	});
 	const on = rsvpFinalEmail({
@@ -88,8 +89,8 @@ describe("the cycle emails", () => {
 			expect(call.text).toContain(`%2Frsvp%2Fg-1%3Fa%3D${answer}`);
 			expect(nudge.text).toContain(`%2Frsvp%2Fg-1%3Fa%3D${answer}`);
 		}
-		// The last call exists to turn a maybe into a number. Handing back the
-		// button that made the problem is how you get to 7:30 with five maybes.
+		// The last call exists to turn a maybe into an answer. Handing back the
+		// button that made the problem is how the verdict meets five maybes.
 		expect(lastCall.text).not.toContain("%3Fa%3Dmaybe");
 		expect(confirmed.text).not.toContain("%3Fa%3Dmaybe");
 		// The verdict asks nothing. The question is closed.
@@ -105,36 +106,42 @@ describe("the cycle emails", () => {
 
 	it("say where the count stands", () => {
 		expect(call.subject).toBe(
-			"Tomorrow, 9:00 PM - 10:30 PM. In, out, or maybe.",
+			"Volleyball tomorrow, 7:30 – 10:00 PM. Are you in?",
 		);
-		expect(nudge.subject).toBe("7 in, 3 short. You have not said anything.");
+		expect(nudge.subject).toBe("Tonight: 7 in, 3 more needed. Are you coming?");
 		expect(confirmed.subject).toBe(
-			"Run is on. Mon, Sep 14, 9:00 PM - 10:30 PM.",
+			"Volleyball is on: Mon, Sep 14, 7:30 – 10:00 PM.",
 		);
-		expect(lastCall.subject).toBe("Last call: 7 in, 2 short by 7:30.");
-		expect(on.subject).toBe("Run is on. 9 in.");
-		expect(off.subject).toBe("No run tonight. 6 in.");
-		expect(call.text).toContain("Sean, Big Ray");
+		expect(lastCall.subject).toBe("Last call for tonight: 7 in so far.");
+		expect(on.subject).toBe("Volleyball is on tonight. 9 in.");
+		expect(off.subject).toBe("No volleyball tonight. 6 in, 8 needed.");
+		expect(call.text).toContain("Ana, Marco");
+	});
+
+	it("name the verdict time they were given, not one of their own", () => {
+		expect(lastCall.text).toContain("At 5:30 PM we make the final call");
+		expect(lastCall.text).toContain("Final call: 5:30 PM");
+		expect(confirmed.text).toContain("before 5:30 PM");
 	});
 
 	it("says tonight when the gym was booked the same day", () => {
 		const today = rsvpCallEmail({ ...facts, today: true, alreadyOn: false });
-		expect(today.subject).toContain("Tonight");
-		expect(today.text).toContain("There is a gym tonight.");
+		expect(today.subject).toContain("tonight");
+		expect(today.text).toContain("Volleyball tonight. Are you in?");
 	});
 
-	it("doubles as the confirmation when ten answered before we asked", () => {
+	it("doubles as the confirmation when enough answered before we asked", () => {
 		const already = rsvpCallEmail({
 			...facts,
-			inCount: 11,
+			inCount: 13,
 			today: false,
 			alreadyOn: true,
 		});
-		expect(already.text).toContain("The run is on.");
+		expect(already.text).toContain("The night is on.");
 	});
 
 	it("tells a sponsor to pass a cancellation on", () => {
-		expect(off.text).toContain("Go tell them before they drive over.");
+		expect(off.text).toContain("let them know before they head over");
 		// The maybes are named on a cancellation: they were waiting on this.
 		expect(off.text).toContain("Pete");
 	});
@@ -164,7 +171,7 @@ describe("welcome", () => {
 	});
 
 	it("says the link is a key and mentions the password option", () => {
-		expect(welcome.subject).toBe("You're on the list.");
+		expect(welcome.subject).toBe("Welcome to Viroj’s Pickup");
 		expect(welcome.text).toContain("don't forward it");
 		expect(welcome.text).toContain("password");
 	});
@@ -195,9 +202,9 @@ describe("auth templates", () => {
 describe("gym money", () => {
 	const call = contributionCallEmail({
 		subject: "Gym money & the rest",
-		body: "Sean paid the county.\n\nPay him back <soon>.",
+		body: "The gym is paid for.\n\nPay your share <soon>.",
 		amount: 40,
-		instructions: "Venmo @sean, or cash & carry",
+		instructions: "Venmo @Viroj7, or cash & carry",
 		siteUrl: site,
 	});
 	const reminder = contributionReminderEmail({
@@ -208,7 +215,7 @@ describe("gym money", () => {
 	});
 
 	it("escapes what the admin typed and keeps the footer", () => {
-		expect(call.html).toContain("Pay him back &lt;soon&gt;.");
+		expect(call.html).toContain("Pay your share &lt;soon&gt;.");
 		expect(call.html).toContain("cash &amp; carry");
 		expect(call.html).not.toContain("<soon>");
 		for (const r of [call, reminder]) {
@@ -221,7 +228,7 @@ describe("gym money", () => {
 		expect(call.html).toContain("Amount");
 		expect(call.html).toContain("$40");
 		expect(call.text).toContain("Amount: $40");
-		expect(call.text).toContain("How to pay: Venmo @sean, or cash & carry");
+		expect(call.text).toContain("How to pay: Venmo @Viroj7, or cash & carry");
 		expect(reminder.text).toContain("Amount: $1,200");
 	});
 
@@ -236,7 +243,7 @@ describe("gym money", () => {
 	});
 
 	it("the reminder names the amount in the subject", () => {
-		expect(reminder.subject).toBe("Still owed: $1,200 for the gym.");
+		expect(reminder.subject).toBe("Reminder: $1,200 for the gym");
 		expect(call.subject).toBe("Gym money & the rest");
 	});
 

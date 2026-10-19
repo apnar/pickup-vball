@@ -1,12 +1,13 @@
-import { Blueprint } from "@pickup-vball/ui/components/blueprint";
-import { Button } from "@pickup-vball/ui/components/button";
+import { Button, buttonVariants } from "@pickup-vball/ui/components/button";
 import { Input } from "@pickup-vball/ui/components/input";
 import { Label } from "@pickup-vball/ui/components/label";
+import { Panel } from "@pickup-vball/ui/components/panel";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import PageTitle from "@/components/page-title";
 import { authClient } from "@/lib/auth-client";
 
 export const Route = createFileRoute("/reset-password")({
@@ -30,11 +31,11 @@ function ResetPasswordPage() {
 		e.preventDefault();
 		if (!token) return;
 		if (password.length < 8) {
-			toast.error("Eight characters minimum. Sean's hip has more integrity.");
+			toast.error("Use at least 8 characters.");
 			return;
 		}
 		if (password !== confirm) {
-			toast.error("Those two do not match.");
+			toast.error("The two passwords don’t match.");
 			return;
 		}
 		setBusy(true);
@@ -44,38 +45,36 @@ function ResetPasswordPage() {
 		});
 		setBusy(false);
 		if (result.error) {
-			toast.error(result.error.message || "That link did not work.");
+			toast.error(
+				result.error.message || "That link didn’t work. Ask for a new one.",
+			);
 			return;
 		}
-		toast.success("Password changed. Sign in with the new one.");
+		toast.success("Password changed. Sign in with your new password.");
 		navigate({ to: "/login" });
 	};
 
 	return (
-		<section className="pt-18 pb-15">
-			<Blueprint className="mx-auto w-full max-w-md p-6">
-				<span className="kicker mb-3 block text-steel-700">Password</span>
-				<h1 className="mb-6 font-heading text-[32px] uppercase leading-9 tracking-[0.02em]">
-					{dead ? "That link is dead." : "Pick a new one."}
-				</h1>
-				{dead ? (
-					<>
-						<p className="text-[15px] leading-6">
-							Reset links last an hour and work once. Ask for another and move
-							faster this time.
-						</p>
-						<div className="mt-4">
-							<Link
-								to="/forgot-password"
-								className="text-[13px] text-steel-700 leading-6"
-							>
-								Send a new link
-							</Link>
-						</div>
-					</>
-				) : (
-					<form onSubmit={submit} className="space-y-4">
-						<div className="space-y-2">
+		<section className="mx-auto w-full max-w-md pt-8 pb-12 md:pt-10">
+			<PageTitle
+				title={dead ? "Link expired" : "Choose a new password"}
+				sub={
+					dead
+						? "Reset links work once and expire after an hour."
+						: "At least 8 characters."
+				}
+			/>
+			{dead ? (
+				<Link
+					to="/forgot-password"
+					className={buttonVariants({ className: "mt-6 w-full no-underline" })}
+				>
+					Send me a new link
+				</Link>
+			) : (
+				<Panel className="mt-6">
+					<form onSubmit={submit} className="flex flex-col gap-4">
+						<div className="flex flex-col gap-1.5">
 							<Label htmlFor="password">New password</Label>
 							<Input
 								id="password"
@@ -87,8 +86,8 @@ function ResetPasswordPage() {
 								onChange={(e) => setPassword(e.target.value)}
 							/>
 						</div>
-						<div className="space-y-2">
-							<Label htmlFor="confirm">Same again</Label>
+						<div className="flex flex-col gap-1.5">
+							<Label htmlFor="confirm">Confirm new password</Label>
 							<Input
 								id="confirm"
 								type="password"
@@ -103,8 +102,8 @@ function ResetPasswordPage() {
 							{busy ? "Saving..." : "Change password"}
 						</Button>
 					</form>
-				)}
-			</Blueprint>
+				</Panel>
+			)}
 		</section>
 	);
 }

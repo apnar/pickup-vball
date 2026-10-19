@@ -1,5 +1,7 @@
+import { CAPACITY } from "@pickup-vball/api/run";
+import { buttonVariants } from "@pickup-vball/ui/components/button";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 
 import PageTitle from "@/components/page-title";
 import SectionKicker from "@/components/section-kicker";
@@ -15,74 +17,79 @@ type Game = Awaited<
 	ReturnType<typeof orpc.games.list.call>
 >["upcoming"][number];
 
-function GameTable({ games, muted }: { games: Game[]; muted?: boolean }) {
+/**
+ * The permit is on the page so a player can show it at the front desk if
+ * the gym staff ask. The URL carries no token, so it is safe to open here.
+ */
+function PermitLink({ game }: { game: Game }) {
+	if (!game.permit) return null;
 	return (
-		<div className="overflow-x-auto">
-			<table
-				className={`w-full min-w-[640px] border-collapse text-sm ${muted ? "text-neutral-700" : ""}`}
-			>
-				<thead>
-					<tr>
-						{["Date", "Tip-off", "Court", "In", "Permit"].map((h) => (
-							<th
-								key={h}
-								className="border-divider border-b px-2 py-1.5 text-left font-medium text-[11px] text-ink/60 uppercase tracking-[0.08em]"
-							>
-								{h}
-							</th>
-						))}
-					</tr>
-				</thead>
-				<tbody>
-					{games.map((g) => (
-						<tr
-							key={g.id}
-							className="border-ink/8 border-b hover:bg-ink/4 [&>td]:px-2 [&>td]:py-2"
-						>
-							<td className="whitespace-nowrap font-heading font-semibold text-xl uppercase tracking-[0.02em]">
-								{g.dateLabel}
-							</td>
-							<td className="tnum whitespace-nowrap">{g.timeLabel}</td>
-							<td>
-								{g.gym.name}
-								{g.gym.address ? (
-									<span className="block text-[13px] text-neutral-700">
-										{g.gym.address}
-									</span>
-								) : null}
-								{g.gym.notes ? (
-									<span className="block text-[13px] text-neutral-700">
-										{g.gym.notes}
-									</span>
-								) : null}
-								{g.notes ? (
-									<span className="block text-[13px] text-neutral-700">
-										{g.notes}
-									</span>
-								) : null}
-							</td>
-							<td className="tnum">{g.inCount}</td>
-							<td>
-								{g.permit ? (
-									<a
-										href={`/api/permits/${g.permit.id}/file`}
-										target="_blank"
-										rel="noreferrer"
-										className="inline-flex items-center border border-steel px-2.5 py-[3px] text-[11px] text-steel tracking-[0.02em] no-underline hover:bg-steel/10"
-									>
-										PDF · {g.permit.label}
-									</a>
-								) : (
-									<span className="inline-flex items-center bg-neutral-100 px-2.5 py-[3px] text-[11px] text-neutral-800 tracking-[0.02em]">
-										None yet
-									</span>
-								)}
-							</td>
-						</tr>
-					))}
-				</tbody>
-			</table>
-		</div>
+		<a
+			href={`/api/permits/${game.permit.id}/file`}
+			target="_blank"
+			rel="noreferrer"
+			className={buttonVariants({
+				variant: "outline",
+				size: "sm",
+				className: "no-underline",
+			})}
+		>
+			Permit (PDF)
+			<span className="sr-only"> for {game.dateLabel}</span>
+		</a>
+	);
+}
+
+/** One upcoming night: when, where, how many are in, and the way to RSVP. */
+function NightCard({ game }: { game: Game }) {
+	const fill = Math.min(100, Math.round((game.inCount / CAPACITY) * 100));
+	return (
+		<li className="panel flex flex-col gap-3.5">
+			<div className="flex flex-col gap-1">
+				<span className="font-semibold text-[14px] text-amber uppercase tracking-[0.12em]">
+					{game.dateLabel}
+				</span>
+				<span className="display tnum text-[34px]">{game.timeLabel}</span>
+			</div>
+			<div className="flex flex-col gap-0.5">
+				<span className="font-semibold">{game.gym.name}</span>
+				{game.gym.address ? (
+					<span className="text-[14px] text-subtle">{game.gym.address}</span>
+				) : null}
+				{game.gym.notes ? (
+					<span className="text-[14px] text-subtle">{game.gym.notes}</span>
+				) : null}
+				{game.notes ? (
+					<span className="text-[14px] text-ink-soft">{game.notes}</span>
+				) : null}
+			</div>
+			<div className="flex flex-col gap-2">
+				<span className="tnum text-[14px] text-subtle">
+					<span className="font-semibold text-ink">{game.inCount}</span> /{" "}
+					{CAPACITY} in
+				</span>
+				<div className="meter" aria-hidden="true">
+					<span style={{ width: `${fill}%` }} />
+				</div>
+			</div>
+			<div className="mt-auto flex flex-wrap gap-2 pt-1">
+				<Link
+					to="/rsvp/$gameId"
+					params={{ gameId: game.id }}
+					className={buttonVariants({
+						size: "sm",
+						className: "flex-1 no-underline",
+					})}
+				>
+					RSVP
+					<span className="sr-only"> for {game.dateLabel}</span>
+				</Link>
+				<PermitLink game={game} />
+			</div>
+			{game.permit ? null : (
+				<span className="text-[13px] text-subtle">No permit on file yet.</span>
+			)}
+		</li>
 	);
 }
 
@@ -92,27 +99,50 @@ function SchedulePage() {
 	const past = data?.past ?? [];
 
 	return (
-		<section className="pt-18 pb-15">
+		<section className="pt-8 pb-12 md:pt-10">
 			<PageTitle
-				line1="The schedule."
-				line2="Only dates we actually have a gym."
+				title="Schedule"
+				sub="Every night with a gym booked. Open one to RSVP."
 			/>
-			<p className="mt-7 mb-10 max-w-[60ch] text-base leading-6">
-				A game exists once someone rented the court and the permit is on file.
-				Open the permit to wave it at the front desk.
-			</p>
-			<SectionKicker className="mb-5">05 · Booked</SectionKicker>
-			{upcoming.length === 0 ? (
-				<p className="text-[15px] text-neutral-700 leading-6">
-					Nothing booked. Somebody call the school.
-				</p>
-			) : (
-				<GameTable games={upcoming} />
-			)}
+			<div className="mt-8">
+				<SectionKicker>Coming up</SectionKicker>
+				{upcoming.length === 0 ? (
+					<p className="panel-outline m-0 text-ink-soft">
+						No nights are booked right now. When a gym is booked, it will show
+						up here and you’ll get an email.
+					</p>
+				) : (
+					<ul className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-4 p-0">
+						{upcoming.map((g) => (
+							<NightCard key={g.id} game={g} />
+						))}
+					</ul>
+				)}
+			</div>
 			{past.length > 0 ? (
-				<div className="mt-12">
-					<SectionKicker className="mb-5">06 · Played</SectionKicker>
-					<GameTable games={past} muted />
+				<div className="mt-10">
+					<SectionKicker>Recent nights</SectionKicker>
+					<ul className="m-0 list-none overflow-hidden rounded-card bg-surface p-0">
+						{past.map((g) => (
+							<li
+								key={g.id}
+								className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-raised border-t px-4 py-3 first:border-t-0"
+							>
+								<span className="flex min-w-0 flex-col">
+									<span className="font-semibold">{g.dateLabel}</span>
+									<span className="text-[14px] text-subtle">
+										{g.timeLabel} · {g.gym.name}
+									</span>
+								</span>
+								<span className="flex items-center gap-3">
+									<span className="tnum text-[14px] text-subtle">
+										{g.inCount} in
+									</span>
+									<PermitLink game={g} />
+								</span>
+							</li>
+						))}
+					</ul>
 				</div>
 			) : null}
 		</section>
