@@ -1,0 +1,61 @@
+import { isAdmin } from "@pickup-vball/api/run";
+import {
+	createFileRoute,
+	Link,
+	Outlet,
+	redirect,
+} from "@tanstack/react-router";
+
+import PageTitle from "@/components/page-title";
+
+export const Route = createFileRoute("/_admin")({
+	beforeLoad: ({ context, location }) => {
+		if (!context.session) {
+			throw redirect({ to: "/login", search: { redirect: location.href } });
+		}
+		if (!isAdmin(context.session.user)) {
+			throw redirect({ to: "/" });
+		}
+		return { session: context.session };
+	},
+	component: AdminLayout,
+});
+
+const tabClass =
+	"kicker border-b-2 border-transparent pb-2 text-ink no-underline hover:text-steel-700 aria-[current=page]:border-steel aria-[current=page]:text-steel-700";
+
+function AdminLayout() {
+	return (
+		<section className="pt-18 pb-15">
+			<PageTitle line1="Front office." line2="Book the gym. File the permit." />
+			<p className="mt-7 mb-10 max-w-[60ch] text-base leading-6">
+				Games only exist once a court is rented. Add the gym once, put the date
+				in, attach the permit, and the headcount opens on the home page.
+			</p>
+			<nav className="mb-8 flex gap-6 border-divider border-b">
+				<Link to="/admin" activeOptions={{ exact: true }} className={tabClass}>
+					Games
+				</Link>
+				<Link to="/admin/gyms" className={tabClass}>
+					Gyms
+				</Link>
+				<Link to="/admin/permits" className={tabClass}>
+					Permits
+				</Link>
+				<Link to="/admin/users" className={tabClass}>
+					Users
+				</Link>
+				<Link to="/admin/email" className={tabClass}>
+					Email
+				</Link>
+				<Link to="/admin/contributions" className={tabClass}>
+					Money
+				</Link>
+				<Link to="/admin/cycle" className={tabClass}>
+					Cycle
+				</Link>
+			</nav>
+			<Outlet />
+		</section>
+	);
+}

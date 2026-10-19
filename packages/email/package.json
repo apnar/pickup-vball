@@ -1,0 +1,24 @@
+{
+	"name": "@pickup-vball/email",
+	"type": "module",
+	"exports": {
+		".": {
+			"default": "./src/index.ts"
+		},
+		"./*": {
+			"default": "./src/*.ts"
+		}
+	},
+	"scripts": {
+		"test": "vitest run",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@pickup-vball/env": "workspace:*"
+	},
+	"devDependencies": {
+		"@pickup-vball/config": "workspace:*",
+		"typescript": "catalog:",
+		"vitest": "^4.1.4"
+	}
+}

@@ -1,0 +1,113 @@
+import { createDb } from "@pickup-vball/db";
+import { stampTokens } from "@pickup-vball/db/people";
+import * as schema from "@pickup-vball/db/schema/auth";
+import { resetPasswordEmail, verifyEmail } from "@pickup-vball/email";
+import { getMailer } from "@pickup-vball/email/worker";
+import { env } from "@pickup-vball/env/server";
+import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { admin } from "better-auth/plugins";
+import { tanstackStartCookies } from "better-auth/tanstack-start";
+
+import { emailLink } from "./link";
+
+export function createAuth() {
+	const db = createDb();
+
+	return betterAuth({
+		database: drizzleAdapter(db, {
+			provider: "sqlite",
+
+			schema: schema,
+		}),
+		trustedOrigins: [env.BETTER_AUTH_URL],
+		emailAndPassword: {
+			enabled: true,
+			// Nobody signs themselves up any more: an admin adds the address and
+			// the welcome email carries the way in.
+			disableSignUp: true,
+			// Verification is encouraged, not enforced: nobody gets locked out of
+			// the headcount over a missed email.
+			requireEmailVerification: false,
+			sendResetPassword: async ({ user, url }) => {
+				const outcome = await getMailer().sendOne(
+					{ email: user.email, name: user.name },
+					resetPasswordEmail({ name: user.name, url }),
+					{ tags: ["auth", "reset-password"] },
+				);
+				if (!outcome.ok) {
+					console.error("reset password email failed", outcome);
+				}
+			},
+		},
+		emailVerification: {
+			sendOnSignUp: true,
+			autoSignInAfterVerification: true,
+			sendVerificationEmail: async ({ user, url }) => {
+				const outcome = await getMailer().sendOne(
+					{ email: user.email, name: user.name },
+					verifyEmail({ name: user.name, url }),
+					{ tags: ["auth", "verify-email"] },
+				);
+				if (!outcome.ok) {
+					console.error("verification email failed", outcome);
+				}
+			},
+		},
+		databaseHooks: {
+			user: {
+				create: {
+					// Every person needs a sign-in token and a footer token, and
+					// making that a property of the table rather than of one call
+					// site means no code path can produce somebody with no way in.
+					// Better Auth drops fields it does not know about, so these
+					// cannot be set in the insert itself.
+					after: async (user) => {
+						try {
+							await stampTokens(db, user.id);
+						} catch (error) {
+							// Hooks run after the transaction commits, so a throw
+							// here would surface as a failed sign-up with a real row
+							// already written. ensureLinkToken picks up the slack.
+							console.error("token stamp failed", error);
+						}
+					},
+				},
+			},
+		},
+		session: {
+			// Half a year, rolling. Players sign in from an email link once and
+			// then stop thinking about it.
+			expiresIn: 60 * 60 * 24 * 180,
+			updateAge: 60 * 60 * 24,
+			// The session cookie carries the user for five minutes, so ordinary
+			// navigation costs no D1 read. A role changed by SQL takes that long
+			// to show up.
+			cookieCache: { enabled: true, maxAge: 5 * 60 },
+		},
+		rateLimit: {
+			// D1, not memory: a Worker isolate's memory is a fresh bucket on
+			// every edge node, so the default limiter never actually refused
+			// anything. The counts live in `rate_limit` (schema/auth.ts).
+			storage: "database",
+			modelName: "rateLimit",
+		},
+		advanced: {
+			ipAddress: {
+				// The one header Cloudflare sets and a client cannot forge. Without
+				// it Better Auth cannot find an address and falls back to a single
+				// bucket shared by everybody, which is a denial of service waiting
+				// for one impatient script.
+				ipAddressHeaders: ["cf-connecting-ip"],
+			},
+		},
+		secret: env.BETTER_AUTH_SECRET,
+		baseURL: env.BETTER_AUTH_URL,
+		plugins: [
+			admin({ adminRoles: ["admin"], defaultRole: "user" }),
+			emailLink({ db }),
+			// Must stay last.
+			tanstackStartCookies(),
+		],
+	});
+}

@@ -1,0 +1,30 @@
+{
+	"name": "@pickup-vball/api",
+	"type": "module",
+	"exports": {
+		".": {
+			"default": "./src/index.ts"
+		},
+		"./*": {
+			"default": "./src/*.ts"
+		}
+	},
+	"scripts": {
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@orpc/client": "catalog:",
+		"@orpc/server": "catalog:",
+		"@pickup-vball/auth": "workspace:*",
+		"@pickup-vball/db": "workspace:*",
+		"@pickup-vball/email": "workspace:*",
+		"@pickup-vball/env": "workspace:*",
+		"drizzle-orm": "^0.45.2",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@pickup-vball/config": "workspace:*",
+		"typescript": "catalog:",
+		"vitest": "^4.1.4"
+	}
+}
