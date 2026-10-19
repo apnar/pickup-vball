@@ -6,7 +6,15 @@ pickup-vball is Viroj's Pickup, an invite-only pickup volleyball group, served
 at https://vball.moco-pickup.com. It began as a copy of pickup-bball (the
 basketball group on moco-pickup.com) and keeps its architecture; the look,
 the copy and the numbers are its own. The design handoff it was built from
-(product spec, tokens, mockups) is summarised under "Design system" below.
+(product spec, tokens, mockups) is summarised under "Design system" below,
+and kept in full in `docs/handoff/` -- gitignored, local only. The README's
+"Launch status" and "What's next" sections are the to-do list; read them
+before starting work.
+
+Production state worth knowing before you test anything: there is no
+`BREVO_API_KEY` in production until "Launch status" says otherwise, so mail
+goes to the Worker log; and CI has no `CLOUDFLARE_API_TOKEN`, so it checks
+but does not deploy.
 
 ## Commands
 

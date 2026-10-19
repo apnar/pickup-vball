@@ -170,7 +170,7 @@ Setting it up:
    ```
 
    Without the secret the route answers 404, so a missing webhook never breaks anything else.
-5. Rate limiting. Better Auth's limiter keeps its counts in D1 (`rate_limit`, migration 0010) keyed by `cf-connecting-ip`, so the password door, the reset form and the link endpoint are actually limited across the edge. The one public oRPC call, `people.requestLink`, has only its per-address ten-minute cooldown; put a **Cloudflare WAF rate-limiting rule** in front of it and the auth routes (zone > Security > WAF > Rate limiting rules): something like 20 requests per minute per IP on `/api/auth/*` and 5 per minute on `/api/rpc/people/requestLink`. The rule lives in the dashboard, not in this repo.
+5. Rate limiting. Better Auth's limiter keeps its counts in D1 (`rate_limit`, in migration 0000) keyed by `cf-connecting-ip`, so the password door, the reset form and the link endpoint are actually limited across the edge. The one public oRPC call, `people.requestLink`, has only its per-address ten-minute cooldown; put a **Cloudflare WAF rate-limiting rule** in front of it and the auth routes (zone > Security > WAF > Rate limiting rules): something like 20 requests per minute per IP on `/api/auth/*` and 5 per minute on `/api/rpc/people/requestLink`. The rule lives in the dashboard, not in this repo.
 6. To exercise the cycle locally with the dev server running: `curl "http://localhost:3001/cdn-cgi/local/scheduled?cron=0+*+*+*+*"`. **Leave `BREVO_API_KEY` unset while you do**, or the job mails everybody in the local database for real.
 
 The templates and Brevo client in `packages/email` are pure functions with tests: `pnpm run test`.
@@ -246,10 +246,37 @@ emoji anywhere.
 Standing copy (site name, house rules, the "how it works" facts, payment) is
 in `apps/web/src/content/run.ts`.
 
+## Launch status
+
+Phase 1 (this copy, reskinned) went live on 2026-10-19. Still to do before
+the group uses it:
+
+- [ ] The first admin (Josh, bootstrapped by SQL) **sets a password** on
+      `/dashboard`. That also retires his sign-in link, which has been shared.
+- [ ] **Turn on email.** Add a sender in Brevo (the domain is already
+      authenticated), change `SENDER` in `packages/email/src/sender.ts`, then
+      `pnpm --filter web exec wrangler secret put BREVO_API_KEY`. Until then
+      every email -- welcome links included -- goes only to the Worker log.
+- [ ] **Register the Brevo webhook** for this host (see "Email", step 4, with
+      `vball.moco-pickup.com`) and set `BREVO_WEBHOOK_SECRET`.
+- [ ] **Add Viroj** on `/admin/users` and make him an admin; he should set a
+      password too. Then add the players.
+- [ ] Book the gyms (`/admin/gyms`) and the first nights (`/admin`).
+- [ ] Add a `CLOUDFLARE_API_TOKEN` repository secret so pushes to `main`
+      deploy (see "Automatic deploys"). Until then, `pnpm run deploy`.
+- [ ] Check that the zone's WAF rate-limiting rules (Email, step 5) cover
+      `vball.moco-pickup.com` as well as the basketball host.
+- [ ] Have Viroj review the house rules and the "how it works" facts in
+      `apps/web/src/content/run.ts`.
+
 ## What's next
 
-The handoff also specified a volleyball product that this site does not
-have yet. In rough order:
+The design handoff also specified a volleyball product that this site does
+not have yet. The full spec -- data model, rules, screen map, open questions
+for the group -- and the 12 approved mockups are in **`docs/handoff/`**, which
+is gitignored because it names the organizer and his payment handle (the
+original is `~/virojs-pickup-handoff.zip` on the maintainer's machine). Read
+`docs/handoff/README.md` before starting any of this. In rough order:
 
 - **Credits instead of gym-money calls.** 1 credit = 1 night = $5. Admins add
   credits when someone pays (Venmo, cash, other); an immutable ledger of
@@ -263,6 +290,13 @@ have yet. In rough order:
 - **A cap and a cutoff per night**, enforced by the server (today the sheet can
   go over `CAPACITY`, and the cutoff is the fixed 5:30 PM verdict).
 - **In/out only**, if the group wants to drop "maybe".
+
+The spec's open questions (waitlist, late-drop policy, negative balances,
+whether players see their own level, SMS, walk-ins and guests, extra
+reverse-coed rules) need answers from the group before the matching piece
+is built. Mockups with no counterpart yet: `A-Credits`, `A-MCredit`,
+`A-CheckIn`, `A-Ledger`, `A-PlayerDetail`, and the format / level parts of
+`A-Sessions`, `A-Session`, `A-Admin` and `A-NewSession`.
 
 ## Database changes
 

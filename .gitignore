@@ -63,3 +63,7 @@ temp
 .dev.vars.*
 !.dev.vars.example
 worker-configuration.d.ts
+
+# The Claude Design handoff (spec + mockups) for Phase 2. Kept locally only:
+# it names the organizer and his payment handle, and this repo is public.
+docs/handoff/
