@@ -42,7 +42,7 @@ describe("splitAudience", () => {
 			active,
 		);
 		// Beth's row is a guest row -- no user_id -- but her name is on the
-		// sheet, so the noon reminder leaves her alone.
+		// sheet, so the morning reminder leaves her alone.
 		expect(split.silentNames).toEqual(["Chris", "Omar"]);
 		expect(split.silentIds).toEqual(["u-chris", "u-omar"]);
 	});

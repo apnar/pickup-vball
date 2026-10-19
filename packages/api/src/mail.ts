@@ -65,7 +65,7 @@ export function rsvpFacts(game: GameSummary, split: Split): RsvpFacts {
 		confirmAt: CONFIRM_AT,
 		playAt: PLAY_AT,
 		capacity: CAPACITY,
-		decideAt: formatGameTime(STAGE.final.at ?? "17:30"),
+		decideAt: formatGameTime(STAGE.final.at ?? "13:00"),
 	};
 }
 

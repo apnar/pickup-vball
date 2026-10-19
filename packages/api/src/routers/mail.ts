@@ -186,7 +186,7 @@ export const mailRouter = {
 	}),
 
 	/**
-	 * Overrule the verdict. The 5:30 count is the rule and this is the
+	 * Overrule the verdict. The 1 PM count is the rule and this is the
 	 * exception -- seven in and four maybes is a night a human might still
 	 * want to play.
 	 */

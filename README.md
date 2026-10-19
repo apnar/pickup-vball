@@ -49,7 +49,7 @@ The whole site runs as a single Cloudflare Worker on the free plan:
   - `/api/unsubscribe/:token` - one-click unsubscribe pages for list emails
   - `/api/brevo/webhook` - Brevo tells the app who unsubscribed, bounced or complained
   - `/api/health` - health check
-- A Cron Trigger runs the Worker's `scheduled` handler (`apps/web/src/server.ts`) every half hour. It runs the RSVP cycle: five emails on a fixed clock and the 5:30 PM verdict on whether a night is on. See "The RSVP cycle" below.
+- A Cron Trigger runs the Worker's `scheduled` handler (`apps/web/src/server.ts`) every half hour. It runs the RSVP cycle: five emails on a fixed clock and the 1 PM verdict on whether a night is on. See "The RSVP cycle" below.
 - The database is Cloudflare D1 (SQLite) accessed through Drizzle via the `DB` binding. Env vars, secrets and bindings come from `cloudflare:workers` (typed in `packages/env/env.d.ts`, which must match `apps/web/wrangler.jsonc`).
 
 ## Local development
@@ -185,16 +185,16 @@ claude mcp add --transport http --scope user brevo https://mcp.brevo.com/v1/brev
 ## The RSVP cycle
 
 Nothing is emailed when a night is booked. Each night asks the group on a
-fixed clock instead, and decides itself at half past five -- two hours before
-a 7:30 start.
+fixed clock instead, and decides itself at 1 PM on the day, the confirmation
+deadline in the house rules.
 
 | # | When | Who | What |
 |---|---|---|---|
 | 01 | 5:00 PM the day before | everybody active | there is a night tomorrow; in, maybe or out |
-| 02 | noon on the day, only under 12 in | only those who have not answered | the names already in, and how many short |
+| 02 | 9:00 AM on the day, only under 12 in | only those who have not answered | the names already in, and how many short |
 | 03 | the moment the 12th yes lands | everyone in or maybe | the night is on |
-| 04 | 3:30 PM on the day, only under 12 in | the maybes and anyone who has not answered | last call |
-| 05 | 5:30 PM on the day | everyone who answered — and if it is off, everybody else | 8 or more in and it happens; fewer and it does not |
+| 04 | 11:30 AM on the day, only under 12 in | the maybes and anyone who has not answered | last call |
+| 05 | 1:00 PM on the day | everyone who answered — and if it is off, everybody else | 8 or more in and it happens; fewer and it does not |
 
 `CONFIRM_AT` (12, two full sides of six), `PLAY_AT` (8, enough for 4 v 4)
 and the stage times live in
@@ -285,7 +285,7 @@ are built (see "Credits and check-in"); the rest, in rough order:
 - **Format and night type** per night: 6 v 6 (cap 18) or 4 v 4 (cap 16),
   coed or reverse coed, with the reverse-coed rules shown on those nights.
 - **A cap and a cutoff per night**, enforced by the server (today the sheet can
-  go over `CAPACITY`, and the cutoff is the fixed 5:30 PM verdict).
+  go over `CAPACITY`, and the cutoff is the fixed 1 PM verdict).
 - **In/out only**, if the group wants to drop "maybe".
 
 Also from the spec but not built: the low-credit alert and the other

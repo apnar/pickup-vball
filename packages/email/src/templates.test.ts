@@ -30,7 +30,7 @@ const facts: RsvpFacts = {
 	confirmAt: 12,
 	playAt: 8,
 	capacity: 18,
-	decideAt: "5:30 PM",
+	decideAt: "1:00 PM",
 };
 
 describe("the cycle emails", () => {
@@ -116,9 +116,9 @@ describe("the cycle emails", () => {
 	});
 
 	it("name the verdict time they were given, not one of their own", () => {
-		expect(lastCall.text).toContain("At 5:30 PM we make the final call");
-		expect(lastCall.text).toContain("Final call: 5:30 PM");
-		expect(confirmed.text).toContain("before 5:30 PM");
+		expect(lastCall.text).toContain("At 1:00 PM we make the final call");
+		expect(lastCall.text).toContain("Final call: 1:00 PM");
+		expect(confirmed.text).toContain("before 1:00 PM");
 	});
 
 	it("says tonight when the gym was booked the same day", () => {

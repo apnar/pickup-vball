@@ -52,32 +52,35 @@ export const conditions = [
 ] as const;
 
 /**
- * House rules, in the order they matter. Numbered where they are rendered,
- * not here, so a rule can be added anywhere without renumbering the rest.
+ * House rules, in the order they matter. Viroj's own five, then the reverse
+ * coed rule the spec asks every revco night to show. Numbered where they are
+ * rendered, not here, so a rule can be added anywhere without renumbering.
+ * The 1 PM in the second one is the RSVP cycle's verdict (packages/api/src/
+ * cycle.ts); change both or neither.
  */
 export const rules = [
 	{
-		title: "Play safe",
-		body: "Stay on your side of the net and call out any ball that rolls onto a court. Stop the rally when someone could get hurt and replay the point.",
+		title: "Work your station",
+		body: "When your team isn’t playing, it works another team’s match: one ref, one score keeper and two line judges. The ref makes the calls, so players don’t call their own. When it’s your turn, go to your station. It isn’t the time to practice on the side, catch up with friends or be on your phone. The teams working your games are counting on you to work theirs.",
 	},
 	{
-		title: "Call your own violations",
-		body: "Nets, lifts, doubles and lines are on the honor system. If a call is close and the teams disagree, replay the point.",
+		title: "Confirm by 1 PM",
+		body: "Answer the email the evening before, or on the day of the night by 1 PM. At 1 PM the night is decided and teams are made from whoever is in, so a spot you haven’t confirmed may go to someone else. If your plans change, change your answer.",
 	},
 	{
-		title: "Rally scoring to 25",
-		body: "Win by two. When a night is running long the last game can go to 15.",
+		title: "No call, no show",
+		body: "If you said you’re in and can’t make it, switch to out as soon as you know. A spot held by someone who doesn’t come keeps someone else from playing, and teams are balanced before the night, so one missing player throws them off.",
 	},
 	{
-		title: "Everyone rotates in",
-		body: "Players waiting on the side come in after each game, so everybody gets about the same time on the court.",
+		title: "Team requests",
+		body: "A parent who wants to play with their kids, or a new player who’d be more comfortable with a friend: just ask, and we’ll make it happen. Other requests to be on the same team we’ll try for, but can’t promise. They can throw off the balance, and playing with different people is how everyone meets each other and gets better.",
+	},
+	{
+		title: "Attitude",
+		body: "Leave the attitude at the door, and don’t be hard on people who aren’t at your level. This is a place to have fun, try new skills and grow. Anyone disrespectful to others gets a warning first. If it keeps happening, they’ll be asked to leave for the night, and after that, to leave the group.",
 	},
 	{
 		title: "Reverse coed nights",
 		body: "The net goes to women’s height (7′ 4⅛″), and men can’t attack or block in front of the 3 m line.",
-	},
-	{
-		title: "Leave the gym as we found it",
-		body: "We are guests of the school. Help put up the nets at the start and take them down at the end, and take your trash with you.",
 	},
 ] as const;

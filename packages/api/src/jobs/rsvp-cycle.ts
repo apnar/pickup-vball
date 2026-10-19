@@ -3,7 +3,7 @@
  * what `../cycle.ts` says, which is also exactly what /admin/cycle tells
  * everybody it does.
  *
- * The half hour matters: the verdict falls at 5:30. Nothing else about the
+ * The half hour matters: the last call falls at 11:30. Nothing else about the
  * schedule lives in wrangler.jsonc -- the job re-derives every instant from
  * `now` against the gym's clock, so the cron only has to be frequent enough,
  * never correct, and daylight saving never touches it.

@@ -38,8 +38,8 @@ describe("the ordinary week", () => {
 		expect(plan(at("2026-09-13", "17:00")).run).toBe("call");
 	});
 
-	it("reminds at noon if the call went out yesterday", () => {
-		const p = plan(at(DATE, "12:00"), {
+	it("reminds at nine if the call went out yesterday", () => {
+		const p = plan(at(DATE, "09:00"), {
 			stamps: stamps({ call: at("2026-09-13", "17:00") }),
 			lastEmailAt: at("2026-09-13", "17:00"),
 		});
@@ -47,46 +47,59 @@ describe("the ordinary week", () => {
 		expect(p.skip).toEqual([]);
 	});
 
-	it("last-calls at half three, then decides at half five", () => {
+	it("last-calls at half eleven, then decides at one", () => {
 		const done = {
 			stamps: stamps({
 				call: at("2026-09-13", "17:00"),
-				nudge: at(DATE, "12:00"),
+				nudge: at(DATE, "09:00"),
 			}),
-			lastEmailAt: at(DATE, "12:00"),
+			lastEmailAt: at(DATE, "09:00"),
 		};
-		expect(plan(at(DATE, "15:30"), done).run).toBe("lastCall");
+		expect(plan(at(DATE, "11:30"), done).run).toBe("lastCall");
 		expect(
-			plan(at(DATE, "17:30"), {
-				stamps: stamps({ ...done.stamps, lastCall: at(DATE, "15:30") }),
-				lastEmailAt: at(DATE, "15:30"),
+			plan(at(DATE, "13:00"), {
+				stamps: stamps({ ...done.stamps, lastCall: at(DATE, "11:30") }),
+				lastEmailAt: at(DATE, "11:30"),
 			}).run,
 		).toBe("final");
+	});
+
+	it("leaves ninety minutes between the reminder and the last call", () => {
+		// The spacing rule would hold the last call if the two were closer;
+		// this is the test that notices when somebody moves one of them.
+		const p = plan(at(DATE, "11:30"), {
+			stamps: stamps({
+				call: at("2026-09-13", "17:00"),
+				nudge: at(DATE, "09:00"),
+			}),
+			lastEmailAt: at(DATE, "09:00"),
+		});
+		expect(p.run).toBe("lastCall");
 	});
 });
 
 describe("a gym booked late", () => {
-	// Booked at one on the day. The five-o'clock-yesterday call is overdue,
-	// and so is the noon reminder.
+	// Booked at ten on the day. The five-o'clock-yesterday call is overdue,
+	// and so is the nine o'clock reminder.
 	it("tells the group it exists before reminding anyone about it", () => {
-		const p = plan(at(DATE, "13:00"));
+		const p = plan(at(DATE, "10:00"));
 		expect(p.run).toBe("call");
 		expect(p.silent).toBe(false);
 	});
 
 	it("holds the next stage for ninety minutes", () => {
-		const p = plan(at(DATE, "14:00"), {
-			stamps: stamps({ call: at(DATE, "13:00") }),
-			lastEmailAt: at(DATE, "13:00"),
+		const p = plan(at(DATE, "11:00"), {
+			stamps: stamps({ call: at(DATE, "10:00") }),
+			lastEmailAt: at(DATE, "10:00"),
 		});
 		expect(p.run).toBeNull();
 		expect(p.reason).toMatch(/holding/);
 	});
 
 	it("abandons the stale reminder rather than sending it late", () => {
-		const p = plan(at(DATE, "15:30"), {
-			stamps: stamps({ call: at(DATE, "13:00") }),
-			lastEmailAt: at(DATE, "13:00"),
+		const p = plan(at(DATE, "11:30"), {
+			stamps: stamps({ call: at(DATE, "10:00") }),
+			lastEmailAt: at(DATE, "10:00"),
 		});
 		expect(p.run).toBe("lastCall");
 		expect(p.skip).toEqual<StageKey[]>(["nudge"]);
@@ -95,16 +108,16 @@ describe("a gym booked late", () => {
 
 describe("the verdict is not optional", () => {
 	it("ignores the cooldown -- half an hour after a late last call", () => {
-		// A last call held by the cooldown until five leaves the verdict well
-		// inside the ninety minutes. The day somebody makes `final` respect
-		// it, this test says whether anyone gets told.
-		const p = plan(at(DATE, "17:30"), {
+		// A last call held by the cooldown until half twelve leaves the
+		// verdict well inside the ninety minutes. The day somebody makes
+		// `final` respect it, this test says whether anyone gets told.
+		const p = plan(at(DATE, "13:00"), {
 			stamps: stamps({
 				call: at("2026-09-13", "17:00"),
-				nudge: at(DATE, "12:00"),
-				lastCall: at(DATE, "17:00"),
+				nudge: at(DATE, "09:00"),
+				lastCall: at(DATE, "12:30"),
 			}),
-			lastEmailAt: at(DATE, "17:00"),
+			lastEmailAt: at(DATE, "12:30"),
 		});
 		expect(p.run).toBe("final");
 	});
@@ -122,9 +135,9 @@ describe("the verdict is not optional", () => {
 		const p = plan(at(DATE, "21:00"), {
 			stamps: stamps({
 				call: at("2026-09-13", "17:00"),
-				nudge: at(DATE, "12:00"),
-				lastCall: at(DATE, "15:30"),
-				final: at(DATE, "17:30"),
+				nudge: at(DATE, "09:00"),
+				lastCall: at(DATE, "11:30"),
+				final: at(DATE, "13:00"),
 			}),
 		});
 		expect(p.run).toBeNull();

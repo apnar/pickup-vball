@@ -57,7 +57,7 @@ async function listGame(
 	const state = userId ? await findPersonState(db, userId) : null;
 
 	// Who has not said a word. Only the server can work this out -- the client
-	// never sees a user id -- and it is the number the noon reminder is about.
+	// never sees a user id -- and it is the number the morning reminder is about.
 	const active = await listRecipients(db, "active");
 	const split = splitAudience(
 		rows.map((r) => ({
@@ -292,7 +292,7 @@ export const rsvpRouter = {
 	 *
 	 * Guests only. Everybody on the list has their own buttons and their own
 	 * emails, and typing a regular's name in for them takes the answer out of
-	 * their hands -- it also marks them answered, so the noon reminder skips the
+	 * their hands -- it also marks them answered, so the morning reminder skips the
 	 * one person who has not actually said anything.
 	 */
 	add: protectedProcedure

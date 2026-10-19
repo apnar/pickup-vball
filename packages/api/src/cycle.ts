@@ -58,10 +58,12 @@ export type Stage = {
 };
 
 /*
- * The clock is set for a 7:30 PM start: the verdict lands two hours before,
- * which is also when the RSVP closes. A night that starts earlier still gets
- * every stage that falls before its start; past the start, the verdict is
- * recorded and nobody is emailed (see R0 in jobs/plan.ts).
+ * The verdict is at 1 PM because the house rules say so: confirm by 1 PM on
+ * the day, and teams are made from whoever is in. The reminder and the last
+ * call sit far enough ahead of it to keep the ninety-minute spacing. A night
+ * that starts earlier still gets every stage that falls before its start;
+ * past the start, the verdict is recorded and nobody is emailed (see R0 in
+ * jobs/plan.ts).
  */
 export const STAGES: readonly Stage[] = [
 	{
@@ -83,8 +85,8 @@ export const STAGES: readonly Stage[] = [
 		column: "nudgeAt",
 		kind: "rsvp_nudge",
 		dayOffset: 0,
-		at: "12:00",
-		when: "Noon on the day",
+		at: "09:00",
+		when: "9:00 AM on the day",
 		who: "Only the people who have not answered",
 		title: "Reminder",
 		says: `Sent only if fewer than ${CONFIRM_AT} are in. Lists everyone who has already said yes. Anyone who has answered is left alone.`,
@@ -110,13 +112,13 @@ export const STAGES: readonly Stage[] = [
 		column: "lastCallAt",
 		kind: "rsvp_last_call",
 		dayOffset: 0,
-		at: "15:30",
-		when: "3:30 PM on the day",
+		at: "11:30",
+		when: "11:30 AM on the day",
 		who: "The maybes, and anyone who still has not answered",
 		title: "Last call",
 		says: `Sent only if the night is still short of ${CONFIRM_AT}. The last chance for a maybe to become a yes.`,
 		aside:
-			"Two hours before the verdict, so there is still time to change plans.",
+			"An hour and a half before the verdict, so there is still time to change plans.",
 	},
 	{
 		key: "final",
@@ -124,13 +126,13 @@ export const STAGES: readonly Stage[] = [
 		column: "decidedAt",
 		kind: "rsvp_final",
 		dayOffset: 0,
-		at: "17:30",
-		when: "5:30 PM on the day",
+		at: "13:00",
+		when: "1:00 PM on the day",
 		who: "Everyone who answered. If it is off, everyone else too.",
 		title: "The verdict",
 		says: `${PLAY_AT} or more in and the night is on. Fewer and it is off. If it was already on and still is, nothing is sent: the answer has not changed.`,
 		aside:
-			"Two hours before a 7:30 start, which leaves time to make other plans.",
+			"The house rules' 1 PM deadline: teams are made from whoever is in, and everyone has the afternoon to make other plans.",
 	},
 ];
 

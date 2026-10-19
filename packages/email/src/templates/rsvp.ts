@@ -33,7 +33,7 @@ export type RsvpFacts = {
 	playAt: number;
 	capacity: number;
 	/**
-	 * When the verdict lands, "5:30 PM". Passed in from the cycle's own clock
+	 * When the verdict lands, "1:00 PM". Passed in from the cycle's own clock
 	 * rather than written into the copy, so the emails cannot name a deadline
 	 * the job is not keeping.
 	 */
