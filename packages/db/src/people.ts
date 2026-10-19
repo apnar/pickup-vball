@@ -146,6 +146,20 @@ export async function listPeople(
 	}));
 }
 
+/** One person, the way `listPeople` shows them. */
+export async function findPerson(
+	db: Db,
+	id: string,
+	now: Date = new Date(),
+): Promise<(Person & { effectiveStatus: PersonStatus }) | null> {
+	const row = await db
+		.select(personColumns)
+		.from(user)
+		.where(eq(user.id, id))
+		.get();
+	return row ? { ...row, effectiveStatus: effectiveStatus(row, now) } : null;
+}
+
 /**
  * Everybody still in the group and whether they are stepped away right now.
  *

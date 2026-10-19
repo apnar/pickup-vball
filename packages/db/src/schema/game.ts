@@ -73,6 +73,16 @@ export const game = sqliteTable(
 		 */
 		lastEmailAt: integer("last_email_at", { mode: "timestamp_ms" }),
 
+		/**
+		 * When an admin closed the night at the gym, which is when everybody
+		 * checked in was charged a credit. Write-once: the check-ins freeze,
+		 * and a mistake after that is a refund on the ledger.
+		 */
+		closedAt: integer("closed_at", { mode: "timestamp_ms" }),
+		closedBy: text("closed_by").references(() => user.id, {
+			onDelete: "set null",
+		}),
+
 		createdAt: integer("created_at", { mode: "timestamp_ms" })
 			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
 			.notNull(),

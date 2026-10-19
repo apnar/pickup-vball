@@ -19,8 +19,7 @@ import { game } from "./game";
  * marked down for the three nights they were never asked about. So stage 01
  * writes down the roster it found -- one row per person, `on_break` for the
  * ones it deliberately skipped -- and the response rate is counted against
- * that, the same way the contribution ledger is a snapshot of the list at
- * send time rather than a live view of it.
+ * that snapshot rather than a live view of the list.
  *
  * A game whose call never went out has no rows here, which is right: nobody
  * was asked, so nobody's record moves.

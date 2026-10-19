@@ -7,7 +7,7 @@ import { Input } from "@pickup-vball/ui/components/input";
 import { Label } from "@pickup-vball/ui/components/label";
 import { Panel } from "@pickup-vball/ui/components/panel";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -17,7 +17,7 @@ import SectionKicker from "@/components/section-kicker";
 import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/utils/orpc";
 
-export const Route = createFileRoute("/_admin/admin/users")({
+export const Route = createFileRoute("/_admin/admin/users/")({
 	component: AdminPeoplePage,
 });
 
@@ -299,7 +299,7 @@ function AdminPeoplePage() {
 			 * stays only for a phone, where six columns cannot fit whatever they do.
 			 */}
 			<div className="overflow-x-auto rounded-card bg-surface">
-				<table className="w-full min-w-[820px] border-collapse text-[15px]">
+				<table className="w-full min-w-[880px] border-collapse text-[15px]">
 					<thead>
 						<tr>
 							<th scope="col" className={thClass}>
@@ -310,6 +310,9 @@ function AdminPeoplePage() {
 							</th>
 							<th scope="col" className={thClass}>
 								Status
+							</th>
+							<th scope="col" className={thClass}>
+								Credits
 							</th>
 							<th scope="col" className={thClass}>
 								Last {RESPONSE_WINDOW}
@@ -335,11 +338,13 @@ function AdminPeoplePage() {
 									className={`border-raised border-t align-top hover:bg-raised-hover [&>td]:px-4 [&>td]:py-3 ${gone ? "text-subtle" : ""}`}
 								>
 									<td className="min-w-[200px]">
-										<span
+										<Link
+											to="/admin/users/$userId"
+											params={{ userId: p.id }}
 											className={`block font-semibold ${gone ? "text-subtle" : "text-ink"}`}
 										>
 											{p.name}
-										</span>
+										</Link>
 										<span className="wrap-anywhere block text-[14px] text-subtle">
 											{p.email}
 										</span>
@@ -370,6 +375,11 @@ function AdminPeoplePage() {
 												Via their email app
 											</span>
 										) : null}
+									</td>
+									<td
+										className={`display tnum text-[20px] ${p.balance > 0 ? "text-ink" : "text-danger"}`}
+									>
+										{p.balance}
 									</td>
 									<td className="text-[14px] text-subtle">
 										<Record rate={p.responses} />

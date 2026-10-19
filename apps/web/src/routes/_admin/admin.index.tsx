@@ -1,4 +1,4 @@
-import { CAPACITY } from "@pickup-vball/api/run";
+import { CAPACITY, todayInRunTimezone } from "@pickup-vball/api/run";
 import { Button, buttonVariants } from "@pickup-vball/ui/components/button";
 import { Input } from "@pickup-vball/ui/components/input";
 import { Label } from "@pickup-vball/ui/components/label";
@@ -145,6 +145,7 @@ function AdminGamesPage() {
 		}
 	};
 
+	const today = todayInRunTimezone();
 	const upcoming = games.data?.upcoming ?? [];
 	const past = games.data?.past ?? [];
 	type Night = (typeof upcoming)[number];
@@ -186,6 +187,25 @@ function AdminGamesPage() {
 			{confirmId === g.id ? "Yes, delete" : "Delete"}
 		</Button>
 	);
+
+	/**
+	 * From the night itself on, a night can be checked in; once closed, the
+	 * same link shows who was charged. A night that was called off has
+	 * nobody to check in.
+	 */
+	const checkInLink = (g: Night, size: "sm" | "xs") =>
+		g.status === "canceled" || g.date > today ? null : (
+			<Link
+				to="/admin/checkin/$gameId"
+				params={{ gameId: g.id }}
+				className={buttonVariants({
+					variant: g.closedAt ? "outline" : "default",
+					size,
+				})}
+			>
+				{g.closedAt ? "Closed · who played" : "Check in"}
+			</Link>
+		);
 
 	return (
 		<section>
@@ -269,6 +289,7 @@ function AdminGamesPage() {
 											<p className="m-0 text-[14px] text-ink-soft">{g.notes}</p>
 										) : null}
 										<div className="mt-auto flex flex-wrap gap-2">
+											{checkInLink(g, "sm")}
 											<Button
 												variant="outline"
 												size="sm"
@@ -276,7 +297,7 @@ function AdminGamesPage() {
 											>
 												Edit
 											</Button>
-											{deleteButton(g, "sm")}
+											{g.closedAt ? null : deleteButton(g, "sm")}
 										</div>
 									</Panel>
 								</li>
@@ -459,6 +480,7 @@ function AdminGamesPage() {
 										</td>
 										<td className="whitespace-nowrap text-right">
 											<div className="flex justify-end gap-2">
+												{checkInLink(g, "xs")}
 												<Button
 													variant="outline"
 													size="xs"
@@ -466,7 +488,7 @@ function AdminGamesPage() {
 												>
 													Edit
 												</Button>
-												{deleteButton(g, "xs")}
+												{g.closedAt ? null : deleteButton(g, "xs")}
 											</div>
 										</td>
 									</tr>

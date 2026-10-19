@@ -170,32 +170,40 @@ file free of drizzle and `cloudflare:workers` — the web app bundles it.
   not write**. Mail clients prefetch link targets — the same reason
   `server/unsubscribe.ts` stopped acting on a GET.
 
-### Gym money
+### Credits and check-in
 
-`contribution_call` is one ask (subject, body, whole-dollar `amount`, one-line
-`instructions`); `contribution` is its ledger, one row per person billed, with
-`status` unpaid / paid / excused. `packages/db/src/contributions.ts` owns every
-read and write, and the pure `tally` / `tallyLine` there are what the admin
-page and the history show. Things that are easy to get wrong:
+`credit_entry` is the ledger and `check_in` the sheet at the gym;
+`packages/db/src/credits.ts` owns every read and write of both, the way
+`people.ts` owns `user`. The words for a row (`describeEntry`), the CSV and
+the month boundary are pure, in `packages/api/src/credits.ts`, which the web
+app bundles -- keep drizzle out of it. Things that are easy to get wrong:
 
-- **The ledger is a snapshot** of `listRecipients(db, "active")` at send time,
-  never a live view of the roster. Reminders go to unpaid ∩ active, computed
-  the same way in the preview count and in `sendToList`'s `onlyPersonIds`, so
-  the number on the button is the number that gets mail.
-- **One open call at a time** (`closed_at IS NULL`). The router refuses in
-  words first; `contribution_call_open_uidx` is a partial unique index on the
-  *expression* `(closed_at is null)` for the double-click the words miss. It
-  cannot be on the column: NULLs are distinct in a unique index.
-- `sendCall` is read → decide → claim → send: the call and its ledger go in
-  (one `db.batch`, chunked twenty rows a statement for D1's parameter cap)
-  *before* the email leaves, and a send that never left discards the call.
-  The other order asks people for money nothing tracks. `send_id` points at
-  the `email_send` row, which stays the record of what went out.
-- `contributions.mine` is the only player read and returns the caller's own
-  row or null. Both emails link to `/dashboard`, a GET that writes nothing;
-  there is no "mark me paid" link and there never can be.
-- `packages/api/src/contributions-render.ts` reaches `siteUrl()`, so the web
-  app must not import it; stock copy reaches the page via `contributions.current`.
+- **Append-only.** Nothing updates or deletes a `credit_entry` row. A balance
+  is `sum(delta)`; there is no balance column. The balance after each row is a
+  window function in a CTE (`listEntries`), computed *before* any filter --
+  a `where` on the same query would run first and the sums would only count
+  the rows that survived it. Ties on the millisecond fall back to `rowid`.
+- **A charge only ever comes from `closeNight`**: one `db.batch` that stamps
+  `game.closed_at` and does an `insert ... select` off `check_in`, so the
+  charges are the sheet as it stands at commit. drizzle's D1 `batch` will not
+  take `db.run(sql)`, and its insert-select wants every column in table
+  order -- hence the long select. A second close hits the partial unique
+  index `credit_entry_played_uidx` (one `played` row per person per night)
+  and the whole batch rolls back; `credit_entry_refund_uidx` does the same
+  for refunds.
+- **The check-in writes carry their own `closed_at is null` test** in SQL
+  rather than trusting the router's read, so a tick that lands mid-close is
+  charged or refused, never left on a frozen sheet uncharged.
+- `credit_entry`'s foreign keys are `restrict`: people are deactivated, never
+  deleted, and a closed night stays on the books (`games.remove` says so in
+  words first). `check_in` cascades with its night, which can only be
+  deleted while it is still open.
+- `credits.mine` is the only player read, filtered by `context.person.id`.
+  The receipt email links to `/credits`, a GET that writes nothing. It goes
+  through `sendToList` with `audience: "everyone"` and one id, so it gets
+  the reader's own key and an `email_send` row like every other send.
+- Negative balances are allowed on purpose (the group's call): they flag,
+  they never block an RSVP.
 
 ### The one-table people model
 

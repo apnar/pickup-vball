@@ -90,6 +90,13 @@ export default function UserMenu() {
 					>
 						Your account
 					</DropdownMenuItem>
+					{/* The phone's tab bar has no room for the roster; the top nav does. */}
+					<DropdownMenuItem
+						className="md:hidden"
+						render={<Link to="/roster" className="no-underline" />}
+					>
+						Roster
+					</DropdownMenuItem>
 					<DropdownMenuItem
 						variant="destructive"
 						onClick={() => {

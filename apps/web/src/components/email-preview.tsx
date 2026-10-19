@@ -4,9 +4,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 /**
- * Shared by the email admin page and the gym money page: both preview and
- * send email the same way, and a preview that differs between pages would be
- * a preview of nothing.
+ * The email admin page's preview and send report, kept apart from the page
+ * so that anything else that ever sends by hand previews the same way -- a
+ * preview that differs between pages would be a preview of nothing.
  */
 
 export type Preview = { subject: string; html: string; text: string };

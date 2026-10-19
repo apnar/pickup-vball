@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 
-import GymMoneyNotice from "@/components/gym-money-notice";
+import CreditNotice from "@/components/credit-notice";
 import PageTitle from "@/components/page-title";
 import RsvpBoard from "@/components/rsvp-board";
 import SectionKicker from "@/components/section-kicker";
@@ -16,7 +16,7 @@ export default function PlayerHome() {
 				sub="The next night on the schedule, and who’s coming."
 			/>
 
-			<GymMoneyNotice />
+			<CreditNotice />
 			<RsvpBoard />
 
 			<section aria-labelledby="how-h" className="mt-6 flex flex-col gap-4">

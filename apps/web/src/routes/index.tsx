@@ -7,16 +7,14 @@ import { orpc } from "@/utils/orpc";
 
 export const Route = createFileRoute("/")({
 	component: HomeComponent,
-	// Strangers get no headcount and owe nothing, so there is nothing to
-	// prefetch for them. Players get both, so the gym-money strip is in the
+	// Strangers get no headcount and have no balance, so there is nothing to
+	// prefetch for them. Players get both, so the credit notice is in the
 	// first paint rather than popping in under the hero.
 	loader: ({ context }) =>
 		context.session
 			? Promise.all([
 					context.queryClient.ensureQueryData(nextHeadcountOptions()),
-					context.queryClient.ensureQueryData(
-						orpc.contributions.mine.queryOptions(),
-					),
+					context.queryClient.ensureQueryData(orpc.credits.mine.queryOptions()),
 				])
 			: null,
 });

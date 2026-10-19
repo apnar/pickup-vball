@@ -1,6 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { createAuth } from "@pickup-vball/auth";
 import { APIError } from "@pickup-vball/auth/errors";
+import { listBalances } from "@pickup-vball/db/credits";
 import {
 	deactivate,
 	effectiveStatus,
@@ -139,13 +140,15 @@ export const peopleRouter = {
 	 * the other players about them.
 	 */
 	list: adminProcedure.handler(async ({ context }) => {
-		const [people, rates] = await Promise.all([
+		const [people, rates, balances] = await Promise.all([
 			listPeople(context.db),
 			readResponseRates(context.db),
+			listBalances(context.db),
 		]);
 		return people.map((person) => ({
 			...person,
 			responses: rates.get(person.id) ?? NO_RESPONSES,
+			balance: balances.get(person.id) ?? 0,
 		}));
 	}),
 

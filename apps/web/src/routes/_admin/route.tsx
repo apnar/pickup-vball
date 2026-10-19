@@ -26,9 +26,10 @@ const TABS = [
 	{ to: "/admin", label: "Nights", exact: true },
 	{ to: "/admin/gyms", label: "Gyms" },
 	{ to: "/admin/permits", label: "Permits" },
+	{ to: "/admin/credits", label: "Give credits" },
+	{ to: "/admin/ledger", label: "Credits ledger" },
 	{ to: "/admin/users", label: "Players" },
 	{ to: "/admin/email", label: "Email" },
-	{ to: "/admin/contributions", label: "Gym money" },
 	{ to: "/admin/cycle", label: "RSVP emails" },
 ] as const;
 

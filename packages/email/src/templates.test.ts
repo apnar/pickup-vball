@@ -2,10 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { escapeHtml, PARAM } from "./render";
 import {
-	CONTRIBUTION_REMINDER_BODY,
-	contributionCallDefaults,
-	contributionCallEmail,
-	contributionReminderEmail,
+	creditsAddedEmail,
 	messageEmail,
 	type RsvpFacts,
 	resetPasswordEmail,
@@ -199,62 +196,40 @@ describe("auth templates", () => {
 	});
 });
 
-describe("gym money", () => {
-	const call = contributionCallEmail({
-		subject: "Gym money & the rest",
-		body: "The gym is paid for.\n\nPay your share <soon>.",
-		amount: 40,
-		instructions: "Venmo @Viroj7, or cash & carry",
+describe("credits added", () => {
+	const paid = creditsAddedEmail({
+		added: 10,
+		balance: 12,
+		method: "Venmo",
+		amountUsd: 50,
 		siteUrl: site,
 	});
-	const reminder = contributionReminderEmail({
-		body: CONTRIBUTION_REMINDER_BODY,
-		amount: 1200,
-		instructions: "Zelle",
+	const behind = creditsAddedEmail({
+		added: 1,
+		balance: -2,
+		method: "Cash",
+		amountUsd: 5,
 		siteUrl: site,
 	});
 
-	it("escapes what the admin typed and keeps the footer", () => {
-		expect(call.html).toContain("Pay your share &lt;soon&gt;.");
-		expect(call.html).toContain("cash &amp; carry");
-		expect(call.html).not.toContain("<soon>");
-		for (const r of [call, reminder]) {
-			expect(r.html).toContain(PARAM.unsubscribeUrl);
-			expect(r.text).toContain(PARAM.unsubscribeUrl);
-		}
+	it("says what was added in the subject", () => {
+		expect(paid.subject).toBe("10 credits added");
+		expect(behind.subject).toBe("1 credit added");
 	});
 
-	it("puts the amount and the instructions in the facts", () => {
-		expect(call.html).toContain("Amount");
-		expect(call.html).toContain("$40");
-		expect(call.text).toContain("Amount: $40");
-		expect(call.text).toContain("How to pay: Venmo @Viroj7, or cash & carry");
-		expect(reminder.text).toContain("Amount: $1,200");
+	it("puts the payment and the new balance in the facts", () => {
+		expect(paid.text).toContain("Paid: $50 by Venmo");
+		expect(paid.text).toContain("Balance: 12 credits");
+		expect(paid.text).toContain("covers your next 12 nights");
+		expect(behind.text).toContain("Balance: -2 credits");
+		expect(behind.text).toContain("still behind");
 	});
 
-	it("sends everyone to the dashboard through their own link", () => {
-		for (const r of [call, reminder]) {
-			expect(r.html).toContain("%2Fdashboard");
+	it("links to the credits page through the reader's own key", () => {
+		for (const r of [paid, behind]) {
+			expect(r.html).toContain("%2Fcredits");
 			expect(r.html).toContain(PARAM.key);
-			expect(r.text).toContain("%2Fdashboard");
-			expect(r.text).toContain(PARAM.key);
-			expect(r.html).not.toContain("/rsvp/");
-		}
-	});
-
-	it("the reminder names the amount in the subject", () => {
-		expect(reminder.subject).toBe("Reminder: $1,200 for the gym");
-		expect(call.subject).toBe("Gym money & the rest");
-	});
-
-	it("the stock copy has no exclamation marks", () => {
-		const defaults = contributionCallDefaults(40);
-		for (const s of [
-			defaults.subject,
-			defaults.body,
-			CONTRIBUTION_REMINDER_BODY,
-		]) {
-			expect(s).not.toContain("!");
+			expect(r.text).toContain(PARAM.unsubscribeUrl);
 		}
 	});
 });

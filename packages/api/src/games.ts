@@ -33,6 +33,8 @@ function selectGames(db: Db) {
 				lastCallAt: game.lastCallAt,
 				decidedAt: game.decidedAt,
 				lastEmailAt: game.lastEmailAt,
+				closedAt: game.closedAt,
+				closedBy: game.closedBy,
 				gym: {
 					id: gym.id,
 					name: gym.name,

@@ -44,6 +44,9 @@ export default function Header() {
 								<Link to="/roster" className={linkClass}>
 									Roster
 								</Link>
+								<Link to="/credits" className={linkClass}>
+									Credits
+								</Link>
 							</>
 						) : null}
 						<Link to="/rules" className={linkClass}>
@@ -111,13 +114,13 @@ export function TabBar() {
 				</svg>
 				Schedule
 			</Link>
-			<Link to="/roster" className={tabClass}>
+			{/* Credits took Roster's place here; the roster is in the account menu. */}
+			<Link to="/credits" className={tabClass}>
 				<svg {...icon} aria-hidden="true">
-					<circle cx="9" cy="8" r="3.5" />
-					<path d="M2.5 20c1-3.5 3.5-5 6.5-5s5.5 1.5 6.5 5" />
-					<path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 15c2 .6 3.2 2.2 3.5 5" />
+					<circle cx="12" cy="12" r="9" />
+					<path d="M12 7v10M9 10h4.5a1.5 1.5 0 0 1 0 3H10a1.5 1.5 0 0 0 0 3h5" />
 				</svg>
-				Roster
+				Credits
 			</Link>
 			{admin ? (
 				<Link to="/admin" className={tabClass}>

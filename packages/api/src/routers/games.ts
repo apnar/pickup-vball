@@ -91,6 +91,15 @@ export const gamesRouter = {
 	remove: adminProcedure
 		.input(z.object({ id: z.string().min(1) }))
 		.handler(async ({ context, input }) => {
+			// A closed night has charges on the ledger pointing at it, and the
+			// ledger does not lose rows. D1 would refuse anyway; this says why.
+			const existing = await findGame(context.db, input.id);
+			if (existing?.closedAt) {
+				throw new ORPCError("BAD_REQUEST", {
+					message:
+						"This night was closed and charged, so it stays on the books.",
+				});
+			}
 			await context.db.delete(game).where(eq(game.id, input.id));
 			return { ok: true };
 		}),

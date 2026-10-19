@@ -1,5 +1,5 @@
 export * from "./auth";
-export * from "./contribution";
+export * from "./credit";
 export * from "./email";
 export * from "./game";
 export * from "./gym";

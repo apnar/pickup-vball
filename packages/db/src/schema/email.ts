@@ -13,10 +13,8 @@ export const EMAIL_KINDS = [
 	"rsvp_final",
 	/** Anything an admin types on /admin/email. */
 	"message",
-	/** Money for the gym: the call and the nag, both sent by hand from
-	 *  /admin/contributions. */
-	"contribution_call",
-	"contribution_reminder",
+	/** One player's receipt when an admin adds credits they paid for. */
+	"credits_added",
 	/**
 	 * Legacy. Nothing writes these any more -- the RSVP cycle replaced the
 	 * announce-on-booking email and the 9 AM reminder -- but rows from before

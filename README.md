@@ -74,7 +74,7 @@ Open [http://localhost:3001](http://localhost:3001).
 The site shows strangers one page and players everything else.
 
 - **Anonymous visitors** get a short description: pickup volleyball most weeknights, somewhere in Montgomery County, the house rules, and how to get in. No gym, no start time, no booked dates, no headcount, no names.
-- **Players** — anyone with a session — get everything: the next night with its gym and time, the schedule, the roster, and one-tap RSVP under their own name. When a call for gym money is open they also see their own row on it — owed, paid or excused — and nobody else's.
+- **Players** — anyone with a session — get everything: the next night with its gym and time, the schedule, the roster, and one-tap RSVP under their own name. They also see their own credit balance and history on `/credits`, and nobody else's.
 
 Nobody signs themselves up. Public sign-up is closed (`emailAndPassword.disableSignUp`), and there is no join form. An admin adds an address on `/admin/users`, the welcome email goes out, and **every link in every email that person gets is unique to them and signs them in when clicked**. That link is a bearer token, which is why the emails say not to forward it. The one exception is the permit PDF: it is meant to be waved at gym staff, so its URL carries nothing.
 
@@ -122,19 +122,20 @@ pnpm --filter web exec wrangler d1 execute DB --remote --command "select link_to
 - **Permits** are PDFs stored in the `PERMITS` R2 bucket (`pickup-vball-permits`) with a row in the `permit` table. Admins upload them on `/admin/permits` and attach them to games. On upload they also tick **which gyms the permit covers** -- one piece of paper from the county often rents two gyms -- which is a set of rows in `permit_gym` and can be re-ticked later from the Gyms button on any permit. Coverage is paperwork, not a booking: it sorts the permit dropdown when an admin books a game, and nothing more. Anyone with the link can open `/api/permits/<id>/file` (add `?download=1` to download), so a permit can be shown to gym staff from any phone.
 - **Headcount** rows in `rsvp` belong to a game (`game_id`). A player taps "I'm in as {name}" to put themselves on the sheet (`rsvp.addMe`, which claims the row by `user_id` and marks it "you"), and can type a friend's name in as well. Deleting a game deletes its headcount.
 
-The oRPC procedures are `account.*`, `games.*`, `gyms.*`, `permits.*`, `rsvp.*`, `people.*`, `mail.*` and `contributions.*` under `packages/api/src/routers`. Admin-only procedures use `adminProcedure` from `packages/api/src/index.ts`; `games.*` and `rsvp.*` reads are `protectedProcedure`, so a stranger gets UNAUTHORIZED rather than the address of the gym. Every procedure is POST-only (`StrictGetMethodPlugin`): the RPC protocol would otherwise take GET with the input in the query string, and a Lax cookie rides along on a top-level GET, which turns any link into a click-to-act-as-you. There is no OpenAPI handler and no `/api/reference`. `/roster` is built from the `user` table by `people.roster`, ranked by nights actually played -- a `protectedProcedure` that deliberately returns less than the admin `people.list`: names, standing and counts, never addresses, tokens or the reason somebody is on a break. Rules and game conditions remain plain content in `apps/web/src/content/run.ts`.
+The oRPC procedures are `account.*`, `games.*`, `gyms.*`, `permits.*`, `rsvp.*`, `people.*`, `mail.*`, `credits.*` and `checkin.*` under `packages/api/src/routers`. Admin-only procedures use `adminProcedure` from `packages/api/src/index.ts`; `games.*` and `rsvp.*` reads are `protectedProcedure`, so a stranger gets UNAUTHORIZED rather than the address of the gym. Every procedure is POST-only (`StrictGetMethodPlugin`): the RPC protocol would otherwise take GET with the input in the query string, and a Lax cookie rides along on a top-level GET, which turns any link into a click-to-act-as-you. There is no OpenAPI handler and no `/api/reference`. `/roster` is built from the `user` table by `people.roster`, ranked by nights actually played -- a `protectedProcedure` that deliberately returns less than the admin `people.list`: names, standing and counts, never addresses, tokens or the reason somebody is on a break. Rules and game conditions remain plain content in `apps/web/src/content/run.ts`.
 
-## Gym money
+## Credits and check-in
 
-Viroj fronts the county's rental and the group pays him back (Venmo @Viroj7, or cash). A **call** for money is written once on `/admin/contributions` (the Gym money tab): a subject, the body, a whole-dollar amount per person, and one line on how to pay. The amount and the instructions come back prefilled next time, so they are typed once. Preview it, send yourself a copy, then send it; it goes to the **active** list and nobody else.
+One credit is one night played, and costs $5 (`CREDIT_PRICE` in `packages/api/src/run.ts`). Players pay Viroj (Venmo @Viroj7, or cash) and an admin turns the money into credits; the gym then charges them, one credit a night, when the admin closes the night at check-in.
 
-- **The ledger is a snapshot.** Sending the call writes one `contribution_call` row and one `contribution` row per person who was on the active list at that moment. Somebody added next week does not owe for a gym they never played in; somebody who takes a break mid-call still does.
-- **One call is open at a time.** The page tracks the open call: a tally line ("14 of 22 paid, $560 of $880."), a table of everybody billed, and per-row **Paid**, **Excuse** and **Not paid** buttons. An excused person is out of both numbers, not counted as paid. Trying to put out a second call while one is open is refused in words; a partial unique index on `contribution_call` backs that up for the double-click the words cannot catch.
-- **Reminders go by hand**, from the same page, to whoever is still unpaid *and* still on the active list. Somebody on a break owes but is not nagged; the page says how many are in that spot. Only a real send stamps `last_reminded_at`.
-- **Close the books** when everyone has paid or been excused. Reminders stop, the players' notices go quiet, and the call moves to the "Past calls" list with its final tally. Marks on a closed call are refused.
-- **Players** see their own row only: a "Gym money" line on `/dashboard`, and an amber strip on the home page while they still owe. Neither page writes anything; marking paid is an admin's job, which is also why the emails carry no "I paid" link (mail clients prefetch links).
-
-Both emails land on `/dashboard` through the reader's own sign-in link and are logged in `email_send` as `contribution_call` and `contribution_reminder`.
+- **The ledger is append-only.** Every change is a `credit_entry` row: who, how many (`delta`), why (`purchase`, `played`, `refund`, `correction`), which night, how it was paid, the note, the admin and the time. Nothing ever updates or deletes one. A balance is the sum of a person's rows; there is no balance column to drift from it, and the balance after each row is worked out when the ledger is read.
+- **Giving credits** (`/admin/credits`, the Give credits tab) is built for a phone: find the player, pick the number (5 / 10 / 20 / 30, or step it), say how they paid. The dollars are the credits times the price. The player gets a receipt email (`credits_added` in `email_send`), sent to the "everyone" audience so somebody on a break still gets it.
+- **Check-in** (`/admin/checkin/<night>`, from the Check in button on a night or the Tonight card on Give credits) opens on the day of the night. Everybody who said they were in is listed with their balance, flagged at zero or below so the admin can collect at the door; "+ Walk-in" adds anybody else in the group. Guests without an account are listed but cannot be charged: settle with them directly. Each tap is saved as it happens.
+- **Closing the night** stamps `game.closed_at` and charges one credit to everybody checked in, in one D1 transaction. No-shows are not charged. After that the sheet is frozen and the night cannot be deleted. A night closed twice -- a double tap, two admins -- charges once: a partial unique index allows one `played` row per person per night, and the second close rolls back whole.
+- **Balances may go below zero.** The group chose to flag rather than block: a player at zero or below sees a notice on the home page and can still RSVP. The ledger page counts how many players are there.
+- **Fixing mistakes** is done from a player's page (`/admin/users/<id>`): **Refund** gives back one night's charge (once per night, also held by an index), and a **correction** adds or takes credits with a reason. Neither edits history; both are new rows.
+- **The ledger** (`/admin/ledger`) shows this month's credits added and used, everybody's entries with the balance each left behind, filters for added / used and a player, and a CSV export of the whole thing (text cells that start with `=`, `+`, `-` or `@` are defused for spreadsheets).
+- **Players** see their own balance and history on `/credits`, which also says how to pay. Nothing there writes, and nothing a player can do moves a credit.
 
 ## Email
 
@@ -149,7 +150,7 @@ Players hear about games by email, and get in through the links in them. Brevo d
   - *Welcome* — when an admin adds someone, or resends their link from `/admin/users`, or a player asks for one from `/login`. Carries their concrete sign-in link, no list footer.
   - *The five cycle emails* — sent by the Cron Trigger, described in "The RSVP cycle" below. An admin can fire any of them early from `/admin/email`, or resend one to a single person from `/admin/users`.
   - *Message* — anything an admin types on `/admin/email`. "Send to me first" delivers a test copy to the signed-in admin only, with their own token substituted so the links are real.
-  - *Gym money* — the call for contributions and the reminder to the unpaid, both sent by hand from `/admin/contributions`. See "Gym money" above.
+  - *Credits added* — the receipt to one player when an admin adds credits they paid for. See "Credits and check-in" above.
   - *Account* — Better Auth's password reset from `/forgot-password`, and the verification email left over from the sign-up era. These carry no unsubscribe link.
 - **Sender.** "Viroj’s Pickup" <`info@moco-pickup.com`>, set in `packages/email/src/sender.ts` -- a placeholder borrowed from the basketball site until this one gets its own sender. The domain's DNS records are already authenticated in Brevo, so any address on moco-pickup.com can be added as a sender there.
 - **Not switched on yet.** Production has no `BREVO_API_KEY`, so every email is printed to the Worker log instead of sent (Workers Logs in the Cloudflare dashboard, or `pnpm --filter web exec wrangler tail`). That includes the welcome emails with sign-in links, so until email is on, new players have to be let in by hand. Set the key (below) to start sending.
@@ -276,13 +277,9 @@ not have yet. The full spec -- data model, rules, screen map, open questions
 for the group -- and the 12 approved mockups are in **`docs/handoff/`**, which
 is gitignored because it names the organizer and his payment handle (the
 original is `~/virojs-pickup-handoff.zip` on the maintainer's machine). Read
-`docs/handoff/README.md` before starting any of this. In rough order:
+`docs/handoff/README.md` before starting any of this. Credits and check-in
+are built (see "Credits and check-in"); the rest, in rough order:
 
-- **Credits instead of gym-money calls.** 1 credit = 1 night = $5. Admins add
-  credits when someone pays (Venmo, cash, other); an immutable ledger of
-  every change; a player's balance is the sum of their entries.
-- **Check-in.** The admin checks people in at the gym and closes the night,
-  which charges one credit per person checked in. No-shows are not charged.
 - **Skill levels**, set by admins (recreational < intermediate < advanced),
   with nights gated by minimum level **on the server**, for listing and RSVP.
 - **Format and night type** per night: 6 v 6 (cap 18) or 4 v 4 (cap 16),
@@ -291,12 +288,17 @@ original is `~/virojs-pickup-handoff.zip` on the maintainer's machine). Read
   go over `CAPACITY`, and the cutoff is the fixed 5:30 PM verdict).
 - **In/out only**, if the group wants to drop "maybe".
 
-The spec's open questions (waitlist, late-drop policy, negative balances,
-whether players see their own level, SMS, walk-ins and guests, extra
-reverse-coed rules) need answers from the group before the matching piece
-is built. Mockups with no counterpart yet: `A-Credits`, `A-MCredit`,
-`A-CheckIn`, `A-Ledger`, `A-PlayerDetail`, and the format / level parts of
-`A-Sessions`, `A-Session`, `A-Admin` and `A-NewSession`.
+Also from the spec but not built: the low-credit alert and the other
+notification switches on the Profile mockup, admin-only notes on a player,
+and a setting to block RSVPs at zero credits (the group chose to allow
+negative balances for now).
+
+Answered so far: balances may go negative; walk-ins are people in the group,
+and guests without accounts are settled off the site. Still open, to answer
+before the matching piece is built: waitlist, late-drop policy, whether
+players see their own level, SMS, extra reverse-coed rules. Mockups with no
+counterpart yet: the skill-level and format parts of `A-Sessions`,
+`A-Session`, `A-Admin`, `A-NewSession` and `A-PlayerDetail`.
 
 ## Database changes
 
@@ -338,7 +340,7 @@ pickup-vball/
 │   ├── ui/          # Shared shadcn/ui components and styles
 │   ├── api/         # oRPC router / business logic
 │   ├── auth/        # Better Auth configuration
-│   ├── db/          # Drizzle schema (auth/people, gym, game, permit, rsvp, email_send) and D1 migrations
+│   ├── db/          # Drizzle schema (auth/people, gym, game, permit, rsvp, credit_entry, check_in, email_send) and D1 migrations
 │   ├── email/       # Brevo client, email templates and their tests
 │   └── env/         # Typed access to Worker env and bindings
 ```

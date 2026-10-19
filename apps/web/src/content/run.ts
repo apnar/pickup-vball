@@ -2,6 +2,8 @@
  * Copy and standing data for the site. Edit here; the pages read from it.
  */
 
+import { CREDIT_PRICE } from "@pickup-vball/api/run";
+
 export const SITE_NAME = "Viroj’s Pickup";
 
 /** Where the group plays, for the footer and the signed-out home page. */
@@ -13,11 +15,11 @@ export const DEFAULT_START_TIME = "19:30";
 /** Prefilled end time (24-hour) when an admin books a night. */
 export const DEFAULT_END_TIME = "22:00";
 
-/** How a player pays. Shown on the home page and the account page. */
+/** How a player pays. Shown on the credits page and the home page. */
 export const PAYMENT = {
 	handle: "@Viroj7",
-	perNight: 5,
-	line: "Venmo Viroj at @Viroj7, or pay cash at the gym. $5 a night.",
+	/** One credit is one night; the price is the API's, so the two agree. */
+	perNight: CREDIT_PRICE,
 } as const;
 
 /** The standing facts about a night, shown to players on the home page. */
@@ -45,7 +47,7 @@ export const conditions = [
 	{
 		prop: "Cost",
 		val: `$${PAYMENT.perNight} a night`,
-		rem: "Venmo Viroj at @Viroj7, or cash at the gym.",
+		rem: "One credit per night you play, charged at check-in. Buy credits by Venmo to @Viroj7 or cash.",
 	},
 ] as const;
 

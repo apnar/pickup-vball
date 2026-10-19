@@ -8,6 +8,9 @@
  */
 export const CAPACITY = 18;
 
+/** Dollars per credit. One credit is one night played. */
+export const CREDIT_PRICE = 5;
+
 /** The gym's timezone. Game dates are calendar days here. */
 export const RUN_TIMEZONE = "America/New_York";
 
