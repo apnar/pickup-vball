@@ -8,6 +8,7 @@ import type { Context } from "./context";
 import { CLOCK_STAGES } from "./cycle";
 import {
 	addDays,
+	FORMAT_LABEL,
 	formatGameDate,
 	formatTimeRange,
 	runInstant,
@@ -26,6 +27,8 @@ function selectGames(db: Db) {
 				startTime: game.startTime,
 				endTime: game.endTime,
 				notes: game.notes,
+				format: game.format,
+				capacity: game.capacity,
 				status: game.status,
 				callAt: game.callAt,
 				nudgeAt: game.nudgeAt,
@@ -84,6 +87,7 @@ export function decorateGame(row: GameRow) {
 				doneAt: (row[stage.column] as Date | null)?.toISOString() ?? null,
 			})),
 		},
+		formatLabel: FORMAT_LABEL[row.format],
 		dateLabel: formatGameDate(row.date),
 		timeLabel: formatTimeRange(row.startTime, row.endTime),
 		isPast: row.date < todayInRunTimezone(),

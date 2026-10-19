@@ -28,7 +28,7 @@ export function headline(
 		return decided ? "It’s on. See you there." : "It’s on.";
 	}
 	if (counts.in >= limits.capacity) return "The night is full.";
-	if (counts.in >= limits.confirmAt) return "Two full sides are in.";
+	if (counts.in >= limits.confirmAt) return "Enough to confirm.";
 	if (counts.in >= limits.playAt) return "Enough to play.";
 	return "Still filling up.";
 }

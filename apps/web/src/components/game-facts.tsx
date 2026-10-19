@@ -61,7 +61,9 @@ export function GameFacts({ game }: { game: Game }) {
 					<path d="M12 7v5l3 2" />
 				</svg>
 				<div className="flex flex-col">
-					<span className="font-semibold">{game.timeLabel}</span>
+					<span className="font-semibold">
+						{game.timeLabel} · {game.formatLabel}
+					</span>
 					{closes && open ? (
 						<span className="text-[14px] text-subtle">
 							RSVP closes {clockLabel(closes)}

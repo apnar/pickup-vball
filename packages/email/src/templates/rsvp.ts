@@ -32,6 +32,8 @@ export type RsvpFacts = {
 	confirmAt: number;
 	playAt: number;
 	capacity: number;
+	/** "6 v 6" or "4 v 4": each night is booked as one or the other. */
+	formatLabel: string;
 	/**
 	 * When the verdict lands, "1:00 PM". Passed in from the cycle's own clock
 	 * rather than written into the copy, so the emails cannot name a deadline
@@ -79,6 +81,7 @@ export function baseFacts(facts: RsvpFacts): Fact[] {
 	return [
 		{ label: "When", value: `${facts.dateLabel}, ${facts.timeLabel}` },
 		{ label: "Where", value: facts.location },
+		{ label: "Format", value: facts.formatLabel },
 		{ label: "Who's in", value: nameList(facts.inNames) },
 	];
 }

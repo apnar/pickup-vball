@@ -41,8 +41,8 @@ export const conditions = [
 	},
 	{
 		prop: "Format",
-		val: "6 v 6",
-		rem: "4 v 4 when numbers are short.",
+		val: "6 v 6 · 4 v 4",
+		rem: "Each night is booked as one or the other. The schedule says which.",
 	},
 	{
 		prop: "Cost",

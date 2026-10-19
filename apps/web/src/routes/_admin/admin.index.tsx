@@ -1,4 +1,11 @@
-import { CAPACITY, todayInRunTimezone } from "@pickup-vball/api/run";
+import {
+	CAPACITY_PICKS,
+	DEFAULT_CAPACITY,
+	FORMAT_LABEL,
+	MAX_CAPACITY,
+	todayInRunTimezone,
+} from "@pickup-vball/api/run";
+import { GAME_FORMATS, type GameFormat } from "@pickup-vball/db/schema/game";
 import { Button, buttonVariants } from "@pickup-vball/ui/components/button";
 import { Input } from "@pickup-vball/ui/components/input";
 import { Label } from "@pickup-vball/ui/components/label";
@@ -23,6 +30,9 @@ const selectClass =
 const fieldClass = "flex flex-col gap-1.5";
 const hintClass = "m-0 text-[14px] text-subtle leading-5";
 
+const chipClass =
+	"min-h-12 rounded-field border-[1.5px] border-line bg-transparent px-4 font-semibold text-[16px] text-ink hover:bg-raised-hover aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-ground";
+
 /** The form's anchor, so "+ New night" and "Edit" can both bring it into view. */
 const FORM_ID = "book-night";
 
@@ -34,6 +44,9 @@ type FormState = {
 	gymId: string;
 	notes: string;
 	permitId: string;
+	format: GameFormat;
+	/** As typed; a number once it is sent. */
+	capacity: string;
 };
 
 const emptyForm: FormState = {
@@ -43,6 +56,8 @@ const emptyForm: FormState = {
 	gymId: "",
 	notes: "",
 	permitId: "",
+	format: "6v6",
+	capacity: String(DEFAULT_CAPACITY),
 };
 
 function AdminGamesPage() {
@@ -95,8 +110,19 @@ function AdminGamesPage() {
 		}),
 	);
 
-	const set = (key: keyof FormState) => (value: string) =>
-		setForm((f) => ({ ...f, [key]: value }));
+	const set =
+		(
+			key:
+				| "date"
+				| "startTime"
+				| "endTime"
+				| "gymId"
+				| "notes"
+				| "permitId"
+				| "capacity",
+		) =>
+		(value: string) =>
+			setForm((f) => ({ ...f, [key]: value }));
 
 	const gymList = gyms.data ?? [];
 	/** Only once we have actually asked: an empty list mid-flight is not news. */
@@ -137,6 +163,8 @@ function AdminGamesPage() {
 			gymId,
 			notes: form.notes || null,
 			permitId: form.permitId || null,
+			format: form.format,
+			capacity: Number(form.capacity),
 		};
 		if (editingId) {
 			update.mutate({ id: editingId, ...payload });
@@ -167,6 +195,8 @@ function AdminGamesPage() {
 			gymId: g.gym.id,
 			notes: g.notes ?? "",
 			permitId: g.permit?.id ?? "",
+			format: g.format,
+			capacity: String(g.capacity),
 		});
 		showForm();
 	};
@@ -240,8 +270,8 @@ function AdminGamesPage() {
 				) : (
 					<ul className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(min(260px,100%),1fr))] gap-4 p-0">
 						{upcoming.map((g) => {
-							const filled = Math.min(g.inCount, CAPACITY);
-							const left = CAPACITY - filled;
+							const filled = Math.min(g.inCount, g.capacity);
+							const left = g.capacity - filled;
 							return (
 								<li key={g.id}>
 									<Panel
@@ -270,11 +300,14 @@ function AdminGamesPage() {
 											</div>
 											<div className="meter">
 												<span
-													style={{ width: `${(filled / CAPACITY) * 100}%` }}
+													style={{ width: `${(filled / g.capacity) * 100}%` }}
 												/>
 											</div>
 										</div>
 										<div className="flex flex-wrap gap-2">
+											<span className="rounded-full bg-raised px-2.5 py-0.5 font-semibold text-[13px] text-ink">
+												{g.formatLabel} · {g.capacity} spots
+											</span>
 											{g.permit ? (
 												<span className="rounded-full bg-raised px-2.5 py-0.5 font-semibold text-[13px] text-ink-soft">
 													Permit: {g.permit.label}
@@ -415,6 +448,53 @@ function AdminGamesPage() {
 							</select>
 						</div>
 					</div>
+					<div className="grid grid-cols-[repeat(auto-fit,minmax(min(240px,100%),1fr))] gap-3.5">
+						<fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
+							<legend className="mb-1.5 p-0 font-semibold text-[14px] text-subtle leading-none">
+								Format
+							</legend>
+							<div className="flex flex-wrap gap-2">
+								{GAME_FORMATS.map((f) => (
+									<button
+										key={f}
+										type="button"
+										aria-pressed={form.format === f}
+										className={chipClass}
+										onClick={() => setForm((s) => ({ ...s, format: f }))}
+									>
+										{FORMAT_LABEL[f]}
+									</button>
+								))}
+							</div>
+						</fieldset>
+						<div className={fieldClass}>
+							<Label htmlFor="capacity">Spots</Label>
+							<div className="flex flex-wrap gap-2">
+								<Input
+									id="capacity"
+									type="number"
+									inputMode="numeric"
+									required
+									min={2}
+									max={MAX_CAPACITY}
+									className="w-24"
+									value={form.capacity}
+									onChange={(e) => set("capacity")(e.target.value)}
+								/>
+								{CAPACITY_PICKS.map((n) => (
+									<button
+										key={n}
+										type="button"
+										aria-pressed={form.capacity === String(n)}
+										className={chipClass}
+										onClick={() => set("capacity")(String(n))}
+									>
+										{n}
+									</button>
+								))}
+							</div>
+						</div>
+					</div>
 					<div className={fieldClass}>
 						<Label htmlFor="notes">Notes (optional)</Label>
 						<Input
@@ -474,7 +554,9 @@ function AdminGamesPage() {
 										</td>
 										<td className="tnum whitespace-nowrap">{g.timeLabel}</td>
 										<td>{g.gym.name}</td>
-										<td className="tnum">{g.inCount}</td>
+										<td className="tnum">
+											{g.inCount} / {g.capacity}
+										</td>
 										<td className="text-[14px]">
 											{g.permit ? g.permit.label : "None"}
 										</td>

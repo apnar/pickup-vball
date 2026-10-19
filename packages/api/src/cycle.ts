@@ -10,7 +10,7 @@
 
 import type { EmailKind } from "@pickup-vball/db/schema/email";
 
-import { CAPACITY } from "./run";
+import { DEFAULT_CAPACITY } from "./run";
 
 /**
  * Twelve in confirms a night: two full sides of six. The twelfth yes sends
@@ -18,7 +18,7 @@ import { CAPACITY } from "./run";
  */
 export const CONFIRM_AT = 12;
 
-/** Eight is enough for 4 v 4. Fewer than that and the night is called off. */
+/** Fewer than eight at the verdict and the night is called off. */
 export const PLAY_AT = 8;
 
 /**
@@ -155,11 +155,11 @@ export const CYCLE_NUMBERS = [
 	{
 		value: PLAY_AT,
 		label: "Minimum",
-		body: "Enough for 4 v 4. Below this at the verdict, the night is called off.",
+		body: "Below this at the verdict, the night is called off.",
 	},
 	{
-		value: CAPACITY,
-		label: "Capacity",
-		body: "Three sides of six, so one team rotates in after each game. The sheet takes no more than this.",
+		value: DEFAULT_CAPACITY,
+		label: "Spots",
+		body: "The usual number. Each night sets its own when it is booked, and once it is full a player's yes is refused.",
 	},
 ] as const;

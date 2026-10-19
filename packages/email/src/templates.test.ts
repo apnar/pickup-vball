@@ -29,7 +29,8 @@ const facts: RsvpFacts = {
 	inCount: 7,
 	confirmAt: 12,
 	playAt: 8,
-	capacity: 18,
+	capacity: 42,
+	formatLabel: "4 v 4",
 	decideAt: "1:00 PM",
 };
 
@@ -64,6 +65,10 @@ describe("the cycle emails", () => {
 		expect(call.html).toContain("Shady Grove &lt;Middle&gt; School");
 		expect(call.html).toContain("side door &amp; bring");
 		expect(call.html).not.toContain("<Middle>");
+	});
+
+	it("say how the night is played", () => {
+		for (const r of all) expect(r.text).toContain("Format: 4 v 4");
 	});
 
 	it("carry the unsubscribe placeholder in both parts", () => {

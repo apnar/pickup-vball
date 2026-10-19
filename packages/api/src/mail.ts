@@ -25,7 +25,7 @@ import { type Split, splitAudience } from "./audience";
 import type { Context } from "./context";
 import { CONFIRM_AT, PLAY_AT, STAGE } from "./cycle";
 import type { GameSummary } from "./games";
-import { CAPACITY, formatGameTime } from "./run";
+import { formatGameTime } from "./run";
 
 type Db = Context["db"];
 
@@ -64,7 +64,8 @@ export function rsvpFacts(game: GameSummary, split: Split): RsvpFacts {
 		inCount: split.yes,
 		confirmAt: CONFIRM_AT,
 		playAt: PLAY_AT,
-		capacity: CAPACITY,
+		capacity: game.capacity,
+		formatLabel: game.formatLabel,
 		decideAt: formatGameTime(STAGE.final.at ?? "13:00"),
 	};
 }

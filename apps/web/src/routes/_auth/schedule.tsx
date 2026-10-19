@@ -1,4 +1,3 @@
-import { CAPACITY } from "@pickup-vball/api/run";
 import { buttonVariants } from "@pickup-vball/ui/components/button";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -42,7 +41,7 @@ function PermitLink({ game }: { game: Game }) {
 
 /** One upcoming night: when, where, how many are in, and the way to RSVP. */
 function NightCard({ game }: { game: Game }) {
-	const fill = Math.min(100, Math.round((game.inCount / CAPACITY) * 100));
+	const fill = Math.min(100, Math.round((game.inCount / game.capacity) * 100));
 	return (
 		<li className="panel flex flex-col gap-3.5">
 			<div className="flex flex-col gap-1">
@@ -50,6 +49,9 @@ function NightCard({ game }: { game: Game }) {
 					{game.dateLabel}
 				</span>
 				<span className="display tnum text-[34px]">{game.timeLabel}</span>
+				<span className="self-start rounded-full bg-raised px-2.5 py-0.5 font-semibold text-[13px]">
+					{game.formatLabel}
+				</span>
 			</div>
 			<div className="flex flex-col gap-0.5">
 				<span className="font-semibold">{game.gym.name}</span>
@@ -66,7 +68,7 @@ function NightCard({ game }: { game: Game }) {
 			<div className="flex flex-col gap-2">
 				<span className="tnum text-[14px] text-subtle">
 					<span className="font-semibold text-ink">{game.inCount}</span> /{" "}
-					{CAPACITY} in
+					{game.capacity} in
 				</span>
 				<div className="meter" aria-hidden="true">
 					<span style={{ width: `${fill}%` }} />

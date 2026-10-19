@@ -2,11 +2,22 @@
  * Facts about the nights that the API needs. Copy lives in apps/web/src/content.
  */
 
+import type { GameFormat } from "@pickup-vball/db/schema/game";
+
 /**
- * How many names the sheet takes. Eighteen is three sides of six: two on the
- * court and one waiting to rotate in.
+ * How many spots a night has unless the admin booking it says otherwise.
+ * Each night carries its own (`game.capacity`); these are the booking form's
+ * starting point and its one-tap choices.
  */
-export const CAPACITY = 18;
+export const DEFAULT_CAPACITY = 42;
+export const CAPACITY_PICKS = [32, 42, 56] as const;
+/** A typo guard on the form, not a policy. */
+export const MAX_CAPACITY = 200;
+
+export const FORMAT_LABEL: Record<GameFormat, string> = {
+	"6v6": "6 v 6",
+	"4v4": "4 v 4",
+};
 
 /** Dollars per credit. One credit is one night played. */
 export const CREDIT_PRICE = 5;

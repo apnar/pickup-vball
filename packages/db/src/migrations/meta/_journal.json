@@ -22,6 +22,13 @@
 			"when": 1792441596189,
 			"tag": "0002_drop_gym_money",
 			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "6",
+			"when": 1792444695854,
+			"tag": "0003_night_format_and_spots",
+			"breakpoints": true
 		}
 	]
 }

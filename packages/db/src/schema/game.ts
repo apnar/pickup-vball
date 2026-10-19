@@ -20,6 +20,13 @@ import { permit } from "./permit";
 export const GAME_STATUSES = ["scheduled", "confirmed", "canceled"] as const;
 export type GameStatus = (typeof GAME_STATUSES)[number];
 
+/**
+ * How a night is played. Chosen when it is booked: a 4 v 4 night is planned
+ * that way, not what a short 6 v 6 night turns into.
+ */
+export const GAME_FORMATS = ["6v6", "4v4"] as const;
+export type GameFormat = (typeof GAME_FORMATS)[number];
+
 /** A booked night. Only exists once a gym has been rented. */
 export const game = sqliteTable(
 	"game",
@@ -40,6 +47,12 @@ export const game = sqliteTable(
 			.notNull()
 			.references(() => gym.id, { onDelete: "restrict" }),
 		notes: text("notes"),
+		format: text("format", { enum: GAME_FORMATS }).notNull().default("6v6"),
+		/**
+		 * How many can say they're in. Set per night when it is booked; a
+		 * player's yes past it is refused, an admin's is not.
+		 */
+		capacity: integer("capacity").notNull().default(42),
 		permitId: text("permit_id").references(() => permit.id, {
 			onDelete: "set null",
 		}),

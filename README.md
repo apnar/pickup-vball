@@ -196,12 +196,16 @@ deadline in the house rules.
 | 04 | 11:30 AM on the day, only under 12 in | the maybes and anyone who has not answered | last call |
 | 05 | 1:00 PM on the day | everyone who answered — and if it is off, everybody else | 8 or more in and it happens; fewer and it does not |
 
-`CONFIRM_AT` (12, two full sides of six), `PLAY_AT` (8, enough for 4 v 4)
+`CONFIRM_AT` (12) and `PLAY_AT` (8, the fewest a night is played with)
 and the stage times live in
 `packages/api/src/cycle.ts`, and `/admin/cycle` renders that same array — so
 the write-up in the admin section cannot describe a schedule the job is not
-keeping. `CAPACITY` (18, three sides of six) stays in
-`packages/api/src/run.ts` with the rest of the facts about the nights. The
+keeping. Each night carries its own format (`6v6` or `4v4`, chosen when it
+is booked -- a 4 v 4 night is planned, not a short 6 v 6 one) and its own
+number of spots (`game.capacity`; the booking form offers 32, 42 and 56,
+from `CAPACITY_PICKS` in `packages/api/src/run.ts`). A player's yes on a full
+night is refused, in the same SQL statement that would write it; an admin's
+is not, so the sheet can still be fixed by hand. The
 times are fixed, not relative to each night's start: a night that starts
 earlier than 7:30 still gets every stage that falls before it, and past the
 start the verdict is recorded without emailing anybody.
@@ -282,10 +286,10 @@ are built (see "Credits and check-in"); the rest, in rough order:
 
 - **Skill levels**, set by admins (recreational < intermediate < advanced),
   with nights gated by minimum level **on the server**, for listing and RSVP.
-- **Format and night type** per night: 6 v 6 (cap 18) or 4 v 4 (cap 16),
-  coed or reverse coed, with the reverse-coed rules shown on those nights.
-- **A cap and a cutoff per night**, enforced by the server (today the sheet can
-  go over `CAPACITY`, and the cutoff is the fixed 1 PM verdict).
+- **Night type** per night: coed or reverse coed, with the reverse-coed
+  rules shown on those nights. (Format and spots per night are built.)
+- **A cutoff per night**, enforced by the server. Today answers can change
+  after the 1 PM verdict.
 - **In/out only**, if the group wants to drop "maybe".
 
 Also from the spec but not built: the low-credit alert and the other

@@ -5,8 +5,12 @@ import {
 	listRecipients,
 } from "@pickup-vball/db/people";
 import { user } from "@pickup-vball/db/schema/auth";
-import { RSVP_RESPONSES, rsvp } from "@pickup-vball/db/schema/rsvp";
-import { and, asc, desc, eq, isNull, ne } from "drizzle-orm";
+import {
+	RSVP_RESPONSES,
+	type RsvpResponse,
+	rsvp,
+} from "@pickup-vball/db/schema/rsvp";
+import { and, asc, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { guestSuggestions, splitAudience } from "../audience";
@@ -15,7 +19,7 @@ import { CONFIRM_AT, PLAY_AT } from "../cycle";
 import { findGame, findNextGame, type GameSummary } from "../games";
 import { protectedProcedure } from "../index";
 import { confirmIfReady } from "../jobs/rsvp-cycle";
-import { CAPACITY, isAdmin, nameKeyOf } from "../run";
+import { isAdmin, nameKeyOf } from "../run";
 
 const nameSchema = z
 	.string()
@@ -89,7 +93,7 @@ async function listGame(
 
 	return {
 		game,
-		capacity: CAPACITY,
+		capacity: game.capacity,
 		confirmAt: CONFIRM_AT,
 		playAt: PLAY_AT,
 		/** The caller's own row, so the board can mark it "you". */
@@ -204,6 +208,69 @@ async function requireGame(db: Context["db"], id: string) {
 	return game;
 }
 
+function full(game: GameSummary): never {
+	throw new ORPCError("BAD_REQUEST", {
+		message: `The night is full: all ${game.capacity} spots are taken. If someone drops out, a spot opens up.`,
+	});
+}
+
+/**
+ * SQL that is true while the night has a spot left. It rides in the same
+ * statement as the write, so two people taking the last spot at once cannot
+ * both get it. Written by hand with an alias: in a subquery drizzle leaves
+ * column names unqualified, and they would resolve against the row being
+ * written.
+ */
+function roomOn(game: GameSummary) {
+	return sql`(select count(*) from rsvp as taken where taken.game_id = ${game.id} and taken.response = 'in') < ${game.capacity}`;
+}
+
+/**
+ * Change an answer on an existing row. A new yes on a full night is refused,
+ * unless an admin is giving it -- somebody has to be able to fix the sheet by
+ * hand, and an admin who lets the night run over has decided to.
+ */
+async function answerRow(
+	db: Context["db"],
+	game: GameSummary,
+	row: { id: string; response: RsvpResponse },
+	set: { response: RsvpResponse; userId?: string; addedBy?: string },
+	admin: boolean,
+) {
+	const takesSpot = set.response === "in" && row.response !== "in" && !admin;
+	const result = await db
+		.update(rsvp)
+		.set(set)
+		.where(and(eq(rsvp.id, row.id), takesSpot ? roomOn(game) : undefined))
+		.run();
+	if (takesSpot && result.meta.changes === 0) full(game);
+}
+
+/**
+ * Put a new row on the sheet. An insert cannot carry a `where`, so a yes is
+ * counted afterwards and taken back out if it was one too many. Two people
+ * racing for the last spot can then both be turned away, which leaves a spot
+ * open rather than the night over its number.
+ */
+async function addRow(
+	db: Context["db"],
+	game: GameSummary,
+	values: typeof rsvp.$inferInsert,
+	admin: boolean,
+) {
+	await db.insert(rsvp).values(values);
+	if (values.response !== "in" || admin) return;
+	const taken = await db
+		.select({ n: sql<number>`count(*)` })
+		.from(rsvp)
+		.where(and(eq(rsvp.gameId, game.id), eq(rsvp.response, "in")))
+		.get();
+	if ((taken?.n ?? 0) > game.capacity) {
+		await db.delete(rsvp).where(eq(rsvp.id, values.id));
+		full(game);
+	}
+}
+
 /** The whole payload, freshly counted, after a write. */
 async function reread(context: Context, gameId: string, fallback: GameSummary) {
 	return listGame(
@@ -241,42 +308,54 @@ export const rsvpRouter = {
 				await requireSpot(context.db, me.id);
 			}
 
+			const admin = isAdmin(me);
 			const mine = await context.db
-				.select({ id: rsvp.id })
+				.select({ id: rsvp.id, response: rsvp.response })
 				.from(rsvp)
 				.where(and(eq(rsvp.gameId, game.id), eq(rsvp.userId, me.id)))
 				.get();
 
 			if (mine) {
-				await context.db
-					.update(rsvp)
-					.set({ response: input.answer })
-					.where(eq(rsvp.id, mine.id));
+				await answerRow(
+					context.db,
+					game,
+					mine,
+					{ response: input.answer },
+					admin,
+				);
 			} else {
 				// Somebody may have typed your name in already, back when the box
 				// took any name. Claim it rather than colliding with the unique
 				// index.
 				const nameKey = nameKeyOf(me.name);
 				const claimed = await context.db
-					.select({ id: rsvp.id })
+					.select({ id: rsvp.id, response: rsvp.response })
 					.from(rsvp)
 					.where(and(eq(rsvp.gameId, game.id), eq(rsvp.nameKey, nameKey)))
 					.get();
 				if (claimed) {
-					await context.db
-						.update(rsvp)
-						.set({ response: input.answer, userId: me.id })
-						.where(eq(rsvp.id, claimed.id));
+					await answerRow(
+						context.db,
+						game,
+						claimed,
+						{ response: input.answer, userId: me.id },
+						admin,
+					);
 				} else {
-					await context.db.insert(rsvp).values({
-						id: crypto.randomUUID(),
-						gameId: game.id,
-						name: me.name,
-						nameKey,
-						response: input.answer,
-						userId: me.id,
-						addedBy: me.id,
-					});
+					await addRow(
+						context.db,
+						game,
+						{
+							id: crypto.randomUUID(),
+							gameId: game.id,
+							name: me.name,
+							nameKey,
+							response: input.answer,
+							userId: me.id,
+							addedBy: me.id,
+						},
+						admin,
+					);
 				}
 			}
 
@@ -321,7 +400,12 @@ export const rsvpRouter = {
 			}
 
 			const existing = await context.db
-				.select({ id: rsvp.id, userId: rsvp.userId, addedBy: rsvp.addedBy })
+				.select({
+					id: rsvp.id,
+					userId: rsvp.userId,
+					addedBy: rsvp.addedBy,
+					response: rsvp.response,
+				})
 				.from(rsvp)
 				.where(and(eq(rsvp.gameId, game.id), eq(rsvp.nameKey, nameKey)))
 				.get();
@@ -336,23 +420,31 @@ export const rsvpRouter = {
 						message: `${name} has already answered for themselves.`,
 					});
 				}
-				await context.db
-					.update(rsvp)
-					.set({
+				await answerRow(
+					context.db,
+					game,
+					existing,
+					{
 						response: "in",
 						...(existing.addedBy === null && { addedBy: me.id }),
-					})
-					.where(eq(rsvp.id, existing.id));
+					},
+					isAdmin(me),
+				);
 			} else {
-				await context.db.insert(rsvp).values({
-					id: crypto.randomUUID(),
-					gameId: game.id,
-					name,
-					nameKey,
-					response: "in",
-					userId: null,
-					addedBy: me.id,
-				});
+				await addRow(
+					context.db,
+					game,
+					{
+						id: crypto.randomUUID(),
+						gameId: game.id,
+						name,
+						nameKey,
+						response: "in",
+						userId: null,
+						addedBy: me.id,
+					},
+					isAdmin(me),
+				);
 			}
 
 			await confirmIfReady(context.db, game.id);
@@ -383,6 +475,7 @@ export const rsvpRouter = {
 					name: rsvp.name,
 					userId: rsvp.userId,
 					addedBy: rsvp.addedBy,
+					response: rsvp.response,
 				})
 				.from(rsvp)
 				.where(and(eq(rsvp.id, input.id), eq(rsvp.gameId, game.id)))
@@ -401,10 +494,13 @@ export const rsvpRouter = {
 				await requireSpot(context.db, me.id);
 			}
 
-			await context.db
-				.update(rsvp)
-				.set({ response: input.answer })
-				.where(eq(rsvp.id, row.id));
+			await answerRow(
+				context.db,
+				game,
+				row,
+				{ response: input.answer },
+				isAdmin(me),
+			);
 
 			await confirmIfReady(context.db, game.id);
 			return reread(context, game.id, game);

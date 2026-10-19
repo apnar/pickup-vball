@@ -297,7 +297,8 @@ templates, where one of them would forget. Every list send writes one
   User-visible text says "night" where the code says `game`.
 - Standing copy and defaults (site name, start time, payment, rules, conditions) live in
   `apps/web/src/content/run.ts`; the numbers the API needs
-  (`CAPACITY`, `RUN_TIMEZONE`, date/time formatting) live in
+  (`DEFAULT_CAPACITY` and the booking form's spot picks, `FORMAT_LABEL`,
+  `CREDIT_PRICE`, `RUN_TIMEZONE`, date/time formatting) live in
   `packages/api/src/run.ts`.
 - Game `date` is a `YYYY-MM-DD` string and `start_time` an `HH:MM` string, both in
   `America/New_York`. Compare with `todayInRunTimezone()`, not with `Date`.

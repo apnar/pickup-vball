@@ -1,10 +1,11 @@
 import { ORPCError } from "@orpc/server";
-import { game } from "@pickup-vball/db/schema/game";
+import { GAME_FORMATS, game } from "@pickup-vball/db/schema/game";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { isUniqueViolation } from "../db-errors";
 import { findGame, findNextGame, listGames } from "../games";
 import { adminProcedure, protectedProcedure } from "../index";
+import { DEFAULT_CAPACITY, MAX_CAPACITY } from "../run";
 
 const dateSchema = z
 	.string()
@@ -20,6 +21,15 @@ const gameInput = z.object({
 	gymId: z.string().min(1, "Pick a gym."),
 	notes: z.string().trim().max(300).nullable().optional(),
 	permitId: z.string().min(1).nullable().optional(),
+	// No `.default()` on these two: `update` takes this schema `.partial()`,
+	// and a default there would quietly reset a night that was not edited.
+	format: z.enum(GAME_FORMATS).optional(),
+	capacity: z
+		.number()
+		.int("Spots must be a whole number.")
+		.min(2, "A night needs at least 2 spots.")
+		.max(MAX_CAPACITY, `A night can have at most ${MAX_CAPACITY} spots.`)
+		.optional(),
 });
 
 export const gamesRouter = {
@@ -45,6 +55,8 @@ export const gamesRouter = {
 					gymId: input.gymId,
 					notes: input.notes || null,
 					permitId: input.permitId ?? null,
+					format: input.format ?? "6v6",
+					capacity: input.capacity ?? DEFAULT_CAPACITY,
 					createdBy: context.session.user.id,
 				});
 			} catch (error) {
@@ -82,6 +94,10 @@ export const gamesRouter = {
 					...(changes.notes !== undefined && { notes: changes.notes || null }),
 					...(changes.permitId !== undefined && {
 						permitId: changes.permitId ?? null,
+					}),
+					...(changes.format !== undefined && { format: changes.format }),
+					...(changes.capacity !== undefined && {
+						capacity: changes.capacity,
 					}),
 				})
 				.where(eq(game.id, id));
