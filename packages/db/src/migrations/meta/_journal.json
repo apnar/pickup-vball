@@ -36,6 +36,20 @@
 			"when": 1792445832203,
 			"tag": "0004_waitlist",
 			"breakpoints": true
+		},
+		{
+			"idx": 5,
+			"version": "6",
+			"when": 1792447296903,
+			"tag": "0005_groups",
+			"breakpoints": true
+		},
+		{
+			"idx": 6,
+			"version": "6",
+			"when": 1792447392523,
+			"tag": "0006_night_per_gym",
+			"breakpoints": true
 		}
 	]
 }

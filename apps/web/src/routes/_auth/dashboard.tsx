@@ -145,6 +145,31 @@ function PasswordPanel() {
 	);
 }
 
+/** Which kinds of night you see. Set by an admin; this only shows them. */
+function GroupsPanel() {
+	const mine = useQuery(orpc.groups.mine.queryOptions());
+	return (
+		<Panel>
+			{mine.isPending ? (
+				<p className="m-0 text-subtle">Loading…</p>
+			) : (mine.data ?? []).length === 0 ? (
+				<p className="m-0 text-ink-soft">
+					You’re not in a group yet, so no nights show up for you. An admin adds
+					you to the ones you play in.
+				</p>
+			) : (
+				<ul className="m-0 flex list-none flex-wrap gap-2 p-0">
+					{(mine.data ?? []).map((g) => (
+						<li key={g.id} className="chip">
+							{g.name}
+						</li>
+					))}
+				</ul>
+			)}
+		</Panel>
+	);
+}
+
 /** Where your balance stands, with the way to the full history. */
 function CreditsPanel() {
 	const mine = useQuery(orpc.credits.mine.queryOptions());
@@ -305,6 +330,11 @@ function RouteComponent() {
 								</div>
 							</dl>
 						</Panel>
+					</div>
+
+					<div>
+						<SectionKicker>Your groups</SectionKicker>
+						<GroupsPanel />
 					</div>
 
 					<div>

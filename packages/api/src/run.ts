@@ -2,7 +2,7 @@
  * Facts about the nights that the API needs. Copy lives in apps/web/src/content.
  */
 
-import type { GameFormat } from "@pickup-vball/db/schema/game";
+import type { GameFormat, NightType } from "@pickup-vball/db/schema/game";
 
 /**
  * How many spots a night has unless the admin booking it says otherwise.
@@ -17,6 +17,11 @@ export const MAX_CAPACITY = 200;
 export const FORMAT_LABEL: Record<GameFormat, string> = {
 	"6v6": "6 v 6",
 	"4v4": "4 v 4",
+};
+
+export const NIGHT_TYPE_LABEL: Record<NightType, string> = {
+	coed: "Coed",
+	revco: "Reverse coed",
 };
 
 /** Dollars per credit. One credit is one night played. */

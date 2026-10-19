@@ -109,7 +109,14 @@ Everything is constructed per request: `createDb()`, `createAuth()`,
 - oRPC procedures come from `packages/api/src/index.ts`:
   `publicProcedure` / `protectedProcedure` / `adminProcedure`. `games.*` and
   `rsvp.*` reads are protected on purpose — a stranger must not learn the gym
-  address or the start time. `gyms.*` and `permits.*` are admin-only; players
+  address or the start time -- and they are scoped by group: a player gets
+  only nights in `game_group`s they belong to (`scopeFor` / `canSee` in
+  `packages/api/src/access.ts`, read from D1 on every call), and a night
+  outside them is NOT_FOUND, never FORBIDDEN, so an id cannot be probed. Any
+  new player-facing read of a game must go through the same two functions.
+  Who is *asked* about a night (every cycle email, the waitlist, the invite
+  snapshot) is `listAskedFor` in `mail.ts`: active members of its group.
+  `gyms.*` and `permits.*` are admin-only; players
   see a gym only through the game it is attached to. `people.roster` is the
   player-facing view of the `user` table and returns strictly less than the
   admin `people.list` — no addresses, tokens, or break reasons.

@@ -5,6 +5,7 @@ import { accountRouter } from "./account";
 import { checkinRouter } from "./checkin";
 import { creditsRouter } from "./credits";
 import { gamesRouter } from "./games";
+import { groupsRouter } from "./groups";
 import { gymsRouter } from "./gyms";
 import { mailRouter } from "./mail";
 import { peopleRouter } from "./people";
@@ -17,6 +18,7 @@ export const appRouter = {
 	}),
 	account: accountRouter,
 	games: gamesRouter,
+	groups: groupsRouter,
 	gyms: gymsRouter,
 	permits: permitsRouter,
 	rsvp: rsvpRouter,

@@ -82,6 +82,9 @@ function AdminPeoplePage() {
 	const { session } = Route.useRouteContext();
 	const people = useQuery(orpc.people.list.queryOptions());
 	const games = useQuery(orpc.games.list.queryOptions());
+	const groups = useQuery(orpc.groups.list.queryOptions());
+	const groupName = new Map((groups.data ?? []).map((g) => [g.id, g.name]));
+	const [newGroups, setNewGroups] = useState<Set<string>>(new Set());
 
 	const [newEmail, setNewEmail] = useState("");
 	const [newName, setNewName] = useState("");
@@ -109,6 +112,7 @@ function AdminPeoplePage() {
 				);
 				setNewEmail("");
 				setNewName("");
+				setNewGroups(new Set());
 				refresh();
 			},
 			onError,
@@ -263,7 +267,11 @@ function AdminPeoplePage() {
 					className="flex flex-wrap items-end gap-4"
 					onSubmit={(e) => {
 						e.preventDefault();
-						add.mutate({ email: newEmail, name: newName || undefined });
+						add.mutate({
+							email: newEmail,
+							name: newName || undefined,
+							groupIds: [...newGroups],
+						});
 					}}
 				>
 					<div className="flex min-w-[220px] flex-1 flex-col gap-1.5">
@@ -285,6 +293,34 @@ function AdminPeoplePage() {
 							onChange={(e) => setNewName(e.target.value)}
 						/>
 					</div>
+					{(groups.data ?? []).length > 0 ? (
+						<fieldset className="m-0 flex w-full flex-col gap-1.5 border-0 p-0">
+							<legend className="mb-1.5 p-0 font-semibold text-[14px] text-subtle">
+								Groups: which nights they’ll see
+							</legend>
+							<div className="flex flex-wrap gap-x-4 gap-y-1">
+								{(groups.data ?? []).map((g) => (
+									<label
+										key={g.id}
+										className="flex min-h-11 cursor-pointer items-center gap-2"
+									>
+										<input
+											type="checkbox"
+											className="size-5 accent-amber"
+											checked={newGroups.has(g.id)}
+											onChange={(e) => {
+												const next = new Set(newGroups);
+												if (e.target.checked) next.add(g.id);
+												else next.delete(g.id);
+												setNewGroups(next);
+											}}
+										/>
+										{g.name}
+									</label>
+								))}
+							</div>
+						</fieldset>
+					) : null}
 					<Button type="submit" disabled={add.isPending}>
 						Add and send link
 					</Button>
@@ -299,7 +335,7 @@ function AdminPeoplePage() {
 			 * stays only for a phone, where six columns cannot fit whatever they do.
 			 */}
 			<div className="overflow-x-auto rounded-card bg-surface">
-				<table className="w-full min-w-[880px] border-collapse text-[15px]">
+				<table className="w-full min-w-[1040px] border-collapse text-[15px]">
 					<thead>
 						<tr>
 							<th scope="col" className={thClass}>
@@ -310,6 +346,9 @@ function AdminPeoplePage() {
 							</th>
 							<th scope="col" className={thClass}>
 								Status
+							</th>
+							<th scope="col" className={thClass}>
+								Groups
 							</th>
 							<th scope="col" className={thClass}>
 								Credits
@@ -375,6 +414,18 @@ function AdminPeoplePage() {
 												Via their email app
 											</span>
 										) : null}
+									</td>
+									<td className="min-w-[160px] text-[13px] text-ink-soft">
+										{admin ? (
+											<span className="text-subtle">All, as an admin</span>
+										) : p.groupIds.length === 0 ? (
+											<span className="text-warn">None: sees no nights</span>
+										) : (
+											p.groupIds
+												.map((id) => groupName.get(id))
+												.filter(Boolean)
+												.join(", ")
+										)}
 									</td>
 									<td
 										className={`display tnum text-[20px] ${p.balance > 0 ? "text-ink" : "text-danger"}`}

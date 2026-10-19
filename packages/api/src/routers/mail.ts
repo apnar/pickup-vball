@@ -81,10 +81,7 @@ export const mailRouter = {
 			return {
 				...rendered,
 				stage: input.stage,
-				recipientCount:
-					audience === null
-						? await countRecipients(context.db)
-						: audience.length,
+				recipientCount: audience.length,
 			};
 		}),
 
@@ -118,7 +115,7 @@ export const mailRouter = {
 				gameId: found.id,
 				rendered,
 				sentBy: context.session.user.id,
-				onlyPersonIds: input.personIds ?? audience ?? undefined,
+				onlyPersonIds: input.personIds ?? audience,
 			});
 			if (!result) nobody();
 			if (!input.personIds && result.sent > 0) {

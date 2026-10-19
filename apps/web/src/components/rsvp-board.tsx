@@ -1,6 +1,8 @@
 import type { Headcount } from "@pickup-vball/api/routers/rsvp";
+import { isAdmin } from "@pickup-vball/api/run";
 import { Button, buttonVariants } from "@pickup-vball/ui/components/button";
 import { Panel } from "@pickup-vball/ui/components/panel";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useRouteContext } from "@tanstack/react-router";
 
 import { dateParts, GameFacts } from "@/components/game-facts";
@@ -21,6 +23,7 @@ import {
 	type RsvpAnswer,
 	yourLine,
 } from "@/lib/rsvp";
+import { orpc } from "@/utils/orpc";
 
 type Row = Headcount["rsvps"][number];
 
@@ -74,15 +77,21 @@ export default function RsvpBoard() {
 		backPending,
 	} = useRsvps();
 	const { session } = useRouteContext({ from: "__root__" });
+	const myGroups = useQuery(orpc.groups.mine.queryOptions());
+	const admin = isAdmin(session?.user);
 
 	if (!headcount) {
+		const noGroups = !admin && myGroups.data?.length === 0;
 		return (
 			<section id="rsvp" className="scroll-mt-6">
 				<Panel className="flex flex-col items-start gap-3">
-					<h2 className="display m-0 text-[32px]">No nights booked yet</h2>
+					<h2 className="display m-0 text-[32px]">
+						{noGroups ? "You’re not in a group yet" : "No nights booked yet"}
+					</h2>
 					<p className="m-0 max-w-[52ch] text-subtle">
-						When the next gym is booked it will show up here, and you’ll get an
-						email the evening before asking if you’re in.
+						{noGroups
+							? "Each night is for one of the group’s groups, like Sunday Night Volleyball. Once an admin adds you to one, its nights show up here and you’ll get its emails."
+							: "When the next gym is booked it will show up here, and you’ll get an email the evening before asking if you’re in."}
 					</p>
 					<Link
 						to="/schedule"
@@ -122,10 +131,14 @@ export default function RsvpBoard() {
 						</div>
 						<div className="flex min-w-0 flex-1 flex-col gap-1.5">
 							<h2 id="next-h" className="kicker m-0">
-								Next night
+								{game.group ? game.group.name : "Next night"}
 							</h2>
 							<span className="font-medium text-[17px]">{game.timeLabel}</span>
 							<span className="text-[15px] text-subtle">{game.gym.name}</span>
+							<span className="flex flex-wrap gap-1.5 pt-0.5">
+								<span className="chip">{game.formatLabel}</span>
+								{game.revco ? <span className="chip-revco">RevCo</span> : null}
+							</span>
 						</div>
 					</div>
 

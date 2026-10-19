@@ -4,11 +4,12 @@
  * file is only the reading and the writing.
  */
 
+import { memberIdsOf } from "@pickup-vball/db/groups";
 import { listRosterState } from "@pickup-vball/db/people";
 import { game } from "@pickup-vball/db/schema/game";
 import { gameInvite } from "@pickup-vball/db/schema/invite";
 import { rsvp } from "@pickup-vball/db/schema/rsvp";
-import { and, desc, inArray, isNotNull, lt } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, lt } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 
 import type { Context } from "./context";
@@ -41,7 +42,19 @@ export async function recordInvites(
 	gameId: string,
 	now: Date = new Date(),
 ): Promise<number> {
-	const roster = await listRosterState(db, now);
+	// The night's group, not the whole list: somebody who could not see the
+	// night was not asked about it, and their record must not move.
+	const night = await db
+		.select({ groupId: game.groupId })
+		.from(game)
+		.where(eq(game.id, gameId))
+		.get();
+	const members = night?.groupId
+		? new Set(await memberIdsOf(db, night.groupId))
+		: null;
+	const roster = (await listRosterState(db, now)).filter(
+		(p) => !members || members.has(p.id),
+	);
 	if (roster.length === 0) return 0;
 	const statements = chunk(roster, 20).map((people) =>
 		db

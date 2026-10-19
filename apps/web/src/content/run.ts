@@ -81,6 +81,6 @@ export const rules = [
 	},
 	{
 		title: "Reverse coed nights",
-		body: "The net goes to women’s height (7′ 4⅛″), and men can’t attack or block in front of the 3 m line.",
+		body: "The net goes to women’s height (7 ft 4⅛ in), and men can’t attack or block in front of the 3 m line.",
 	},
 ] as const;

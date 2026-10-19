@@ -32,6 +32,8 @@ export type Split = {
 	out: number;
 	/** In line for a spot on a full night. Not in, and not silent either. */
 	waitlist: number;
+	/** Everybody asked about this night: the active people in its group. */
+	askedIds: string[];
 	/** Active players who have not answered and are not already on the sheet. */
 	silent: number;
 	inNames: string[];
@@ -49,7 +51,8 @@ export type Split = {
 };
 
 /**
- * Split the sheet against the active list.
+ * Split the sheet against the people asked about the night -- the active
+ * members of its group, from `listAskedFor`.
  *
  * Guests count toward the totals -- a body in the gym is a body -- but they
  * have no inbox, so they never appear in an id set.
@@ -89,6 +92,7 @@ export function splitAudience(rows: SheetRow[], active: Person[]): Split {
 		out: rows.filter((r) => r.response === "out").length,
 		waitlist: waiting.length,
 		silent: silent.length,
+		askedIds: active.map((p) => p.id),
 		inNames: ins.map((r) => r.name),
 		maybeNames: maybes.map((r) => r.name),
 		inIds: idsOf(ins),

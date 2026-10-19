@@ -145,7 +145,7 @@ export async function confirmIfReady(
 		now,
 	});
 	return finish(db, gameId, "confirmed", rendered, {
-		onlyPersonIds: audience ?? undefined,
+		onlyPersonIds: audience,
 	});
 }
 
@@ -232,7 +232,7 @@ async function runStage(
 			force: on ? "on" : "off",
 		});
 		return finish(db, summary.id, "final", rendered, {
-			onlyPersonIds: audience ?? undefined,
+			onlyPersonIds: audience,
 		});
 	}
 
@@ -276,7 +276,9 @@ async function runStage(
 			permitUrl: permitUrl(summary),
 			now,
 		});
-		return finish(db, summary.id, "call", rendered, {});
+		return finish(db, summary.id, "call", rendered, {
+			onlyPersonIds: split.askedIds,
+		});
 	}
 
 	if (stage === "nudge") {

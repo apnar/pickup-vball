@@ -3,9 +3,15 @@ import {
 	DEFAULT_CAPACITY,
 	FORMAT_LABEL,
 	MAX_CAPACITY,
+	NIGHT_TYPE_LABEL,
 	todayInRunTimezone,
 } from "@pickup-vball/api/run";
-import { GAME_FORMATS, type GameFormat } from "@pickup-vball/db/schema/game";
+import {
+	GAME_FORMATS,
+	type GameFormat,
+	NIGHT_TYPES,
+	type NightType,
+} from "@pickup-vball/db/schema/game";
 import { Button, buttonVariants } from "@pickup-vball/ui/components/button";
 import { Input } from "@pickup-vball/ui/components/input";
 import { Label } from "@pickup-vball/ui/components/label";
@@ -44,7 +50,10 @@ type FormState = {
 	gymId: string;
 	notes: string;
 	permitId: string;
+	/** Required; picking one fills in its format, type and spots. */
+	groupId: string;
 	format: GameFormat;
+	nightType: NightType;
 	/** As typed; a number once it is sent. */
 	capacity: string;
 };
@@ -56,7 +65,9 @@ const emptyForm: FormState = {
 	gymId: "",
 	notes: "",
 	permitId: "",
+	groupId: "",
 	format: "6v6",
+	nightType: "coed",
 	capacity: String(DEFAULT_CAPACITY),
 };
 
@@ -65,6 +76,7 @@ function AdminGamesPage() {
 	const games = useQuery(orpc.games.list.queryOptions());
 	const gyms = useQuery(orpc.gyms.list.queryOptions());
 	const permits = useQuery(orpc.permits.list.queryOptions());
+	const groups = useQuery(orpc.groups.list.queryOptions());
 	const [form, setForm] = useState<FormState>(emptyForm);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -156,6 +168,10 @@ function AdminGamesPage() {
 			toast.error("Add a gym first.");
 			return;
 		}
+		if (!form.groupId) {
+			toast.error("Pick a group.");
+			return;
+		}
 		const payload = {
 			date: form.date,
 			startTime: form.startTime,
@@ -163,7 +179,9 @@ function AdminGamesPage() {
 			gymId,
 			notes: form.notes || null,
 			permitId: form.permitId || null,
+			groupId: form.groupId,
 			format: form.format,
+			nightType: form.nightType,
 			capacity: Number(form.capacity),
 		};
 		if (editingId) {
@@ -195,7 +213,9 @@ function AdminGamesPage() {
 			gymId: g.gym.id,
 			notes: g.notes ?? "",
 			permitId: g.permit?.id ?? "",
+			groupId: g.group?.id ?? "",
 			format: g.format,
+			nightType: g.nightType,
 			capacity: String(g.capacity),
 		});
 		showForm();
@@ -285,6 +305,9 @@ function AdminGamesPage() {
 											<span className="text-[14px] text-subtle">
 												{g.gym.name}
 											</span>
+											<span className="font-semibold text-[14px] text-ink-soft">
+												{g.group?.name ?? "No group: open to everyone"}
+											</span>
 										</div>
 										<div className="flex flex-col gap-2">
 											<div className="flex items-baseline justify-between gap-3 text-[14px]">
@@ -312,6 +335,11 @@ function AdminGamesPage() {
 											<span className="rounded-full bg-raised px-2.5 py-0.5 font-semibold text-[13px] text-ink">
 												{g.formatLabel} · {g.capacity} spots
 											</span>
+											{g.revco ? (
+												<span className="rounded-full border-[1.5px] border-revco px-2.5 py-px font-semibold text-[13px] text-revco-text">
+													RevCo
+												</span>
+											) : null}
 											{g.permit ? (
 												<span className="rounded-full bg-raised px-2.5 py-0.5 font-semibold text-[13px] text-ink-soft">
 													Permit: {g.permit.label}
@@ -349,6 +377,44 @@ function AdminGamesPage() {
 					{editingId ? "Edit night" : "Book a night"}
 				</SectionKicker>
 				<form onSubmit={submit} className="flex flex-col gap-4">
+					<div className={fieldClass}>
+						<Label htmlFor="groupId">Group</Label>
+						<select
+							id="groupId"
+							className={selectClass}
+							required
+							value={form.groupId}
+							onChange={(e) => {
+								const group = (groups.data ?? []).find(
+									(x) => x.id === e.target.value,
+								);
+								// The group's defaults, which the fields below can still change.
+								setForm((f) => ({
+									...f,
+									groupId: e.target.value,
+									...(group && {
+										format: group.format,
+										nightType: group.nightType,
+										capacity: String(group.capacity),
+									}),
+								}));
+							}}
+						>
+							<option value="" disabled>
+								Pick a group
+							</option>
+							{(groups.data ?? []).map((x) => (
+								<option key={x.id} value={x.id}>
+									{x.name}
+								</option>
+							))}
+						</select>
+						<p className={hintClass}>
+							Only people in the group see the night and get its emails. Its
+							format, type and spots fill in below.{" "}
+							<Link to="/admin/groups">Manage groups</Link>
+						</p>
+					</div>
 					<div className="grid grid-cols-[repeat(auto-fit,minmax(min(160px,100%),1fr))] gap-3.5">
 						<div className={fieldClass}>
 							<Label htmlFor="date">Date</Label>
@@ -471,6 +537,24 @@ function AdminGamesPage() {
 								))}
 							</div>
 						</fieldset>
+						<fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
+							<legend className="mb-1.5 p-0 font-semibold text-[14px] text-subtle leading-none">
+								Type
+							</legend>
+							<div className="flex flex-wrap gap-2">
+								{NIGHT_TYPES.map((t) => (
+									<button
+										key={t}
+										type="button"
+										aria-pressed={form.nightType === t}
+										className={chipClass}
+										onClick={() => setForm((s) => ({ ...s, nightType: t }))}
+									>
+										{t === "revco" ? "RevCo" : NIGHT_TYPE_LABEL[t]}
+									</button>
+								))}
+							</div>
+						</fieldset>
 						<div className={fieldClass}>
 							<Label htmlFor="capacity">Spots</Label>
 							<div className="flex flex-wrap gap-2">
@@ -557,7 +641,14 @@ function AdminGamesPage() {
 											{g.dateLabel}
 										</td>
 										<td className="tnum whitespace-nowrap">{g.timeLabel}</td>
-										<td>{g.gym.name}</td>
+										<td>
+											{g.gym.name}
+											{g.group ? (
+												<span className="block text-[13px] text-subtle">
+													{g.group.name}
+												</span>
+											) : null}
+										</td>
 										<td className="tnum">
 											{g.inCount} / {g.capacity}
 										</td>

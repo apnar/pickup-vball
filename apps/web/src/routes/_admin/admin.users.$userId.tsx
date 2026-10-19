@@ -26,6 +26,80 @@ const STATUS: Record<string, string> = {
 	deactivated: "Deactivated",
 };
 
+/**
+ * Which groups somebody is in: the nights they can see. Saved as a set, so
+ * unticking one is as much an answer as ticking another.
+ */
+function GroupsPanel({ userId, admin }: { userId: string; admin: boolean }) {
+	const queryClient = useQueryClient();
+	const groups = useQuery(orpc.groups.list.queryOptions());
+	const current = (groups.data ?? [])
+		.filter((g) => g.memberIds.includes(userId))
+		.map((g) => g.id);
+	const [picked, setPicked] = useState<Set<string> | null>(null);
+	const chosen = picked ?? new Set(current);
+	const save = useMutation(
+		orpc.people.setGroups.mutationOptions({
+			onSuccess: () => {
+				toast.success("Groups saved.");
+				setPicked(null);
+				queryClient.invalidateQueries({ queryKey: orpc.groups.key() });
+				queryClient.invalidateQueries({ queryKey: orpc.people.key() });
+			},
+			onError: (error: Error) => toast.error(error.message),
+		}),
+	);
+	return (
+		<Panel className="flex flex-col gap-3.5">
+			<SectionKicker className="m-0">Groups</SectionKicker>
+			<p className="m-0 text-[14px] text-subtle">
+				{admin
+					? "As an admin they see every night anyway. Groups decide which emails they get."
+					: "They see, and get emails about, nights in these groups only."}
+			</p>
+			<form
+				className="flex flex-col gap-3"
+				onSubmit={(e) => {
+					e.preventDefault();
+					save.mutate({ userId, groupIds: [...chosen] });
+				}}
+			>
+				<fieldset className="m-0 flex flex-col gap-0.5 border-0 p-0">
+					<legend className="sr-only">Groups</legend>
+					{(groups.data ?? []).map((g) => (
+						<label
+							key={g.id}
+							className="flex min-h-11 cursor-pointer items-center gap-3 rounded-field px-2 hover:bg-raised-hover"
+						>
+							<input
+								type="checkbox"
+								className="size-5 accent-amber"
+								checked={chosen.has(g.id)}
+								onChange={(e) => {
+									const next = new Set(chosen);
+									if (e.target.checked) next.add(g.id);
+									else next.delete(g.id);
+									setPicked(next);
+								}}
+							/>
+							{g.name}
+						</label>
+					))}
+				</fieldset>
+				<Button
+					type="submit"
+					variant="outline"
+					size="sm"
+					className="self-start"
+					disabled={save.isPending || picked === null}
+				>
+					Save groups
+				</Button>
+			</form>
+		</Panel>
+	);
+}
+
 /** One player's credits: where they stand, how they got there, and the fixes. */
 function PlayerPage() {
 	const { userId } = Route.useParams();
@@ -113,6 +187,7 @@ function PlayerPage() {
 			</div>
 
 			<div className="grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-4">
+				<GroupsPanel userId={person.id} admin={person.role === "admin"} />
 				<Panel className="flex flex-col gap-3.5">
 					<SectionKicker className="m-0">Credits</SectionKicker>
 					<div className="flex items-center gap-4">

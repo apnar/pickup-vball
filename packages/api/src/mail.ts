@@ -1,11 +1,14 @@
+import { memberIdsOf } from "@pickup-vball/db/groups";
 import {
 	type Audience,
 	ensureLinkToken,
 	ensureUnsubscribeToken,
 	listRecipients,
 	markLinkSent,
+	type Recipient,
 } from "@pickup-vball/db/people";
 import { type EmailKind, emailSend } from "@pickup-vball/db/schema/email";
+import { game } from "@pickup-vball/db/schema/game";
 import { rsvp } from "@pickup-vball/db/schema/rsvp";
 import type {
 	ListRecipient,
@@ -65,7 +68,7 @@ export function rsvpFacts(game: GameSummary, split: Split): RsvpFacts {
 		confirmAt: CONFIRM_AT,
 		playAt: PLAY_AT,
 		capacity: game.capacity,
-		formatLabel: game.formatLabel,
+		formatLabel: game.kindLabel,
 		decideAt: formatGameTime(STAGE.final.at ?? "13:00"),
 	};
 }
@@ -86,11 +89,32 @@ export async function readSheet(db: Db, gameId: string) {
 		.all();
 }
 
-/** The sheet and the list together, split into who hears what. */
+/**
+ * Everybody active who is asked about a night: the members of its group. A
+ * night from before groups has none and stays open to the whole list. Every
+ * cycle email's audience is cut from this, so nobody hears about a night
+ * they cannot open.
+ */
+export async function listAskedFor(
+	db: Db,
+	groupId: string | null,
+): Promise<Recipient[]> {
+	const active = await listRecipients(db, "active");
+	if (!groupId) return active;
+	const members = new Set(await memberIdsOf(db, groupId));
+	return active.filter((p) => members.has(p.id));
+}
+
+/** The sheet and the night's people together, split into who hears what. */
 export async function readSplit(db: Db, gameId: string): Promise<Split> {
+	const night = await db
+		.select({ groupId: game.groupId })
+		.from(game)
+		.where(eq(game.id, gameId))
+		.get();
 	const [rows, active] = await Promise.all([
 		readSheet(db, gameId),
-		listRecipients(db, "active"),
+		listAskedFor(db, night?.groupId ?? null),
 	]);
 	return splitAudience(
 		rows,

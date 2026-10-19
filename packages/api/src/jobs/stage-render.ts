@@ -21,8 +21,8 @@ import { todayInRunTimezone } from "../run";
 
 export type StageRender = {
 	rendered: Rendered;
-	/** Who it goes to, or null for "everybody active". */
-	audience: string[] | null;
+	/** Who it goes to. The call goes to everybody asked about the night. */
+	audience: string[];
 };
 
 export function renderStage(input: {
@@ -46,7 +46,7 @@ export function renderStage(input: {
 					today: game.date === todayInRunTimezone(now),
 					alreadyOn: split.yes >= CONFIRM_AT,
 				}),
-				audience: null,
+				audience: split.askedIds,
 			};
 		case "nudge":
 			return {

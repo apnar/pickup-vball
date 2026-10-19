@@ -2,6 +2,7 @@ export * from "./auth";
 export * from "./credit";
 export * from "./email";
 export * from "./game";
+export * from "./group";
 export * from "./gym";
 export * from "./invite";
 export * from "./permit";

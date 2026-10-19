@@ -9,12 +9,14 @@ import { RSVP_ANSWERS, rsvp } from "@pickup-vball/db/schema/rsvp";
 import { and, asc, desc, eq, isNull, ne } from "drizzle-orm";
 import { z } from "zod";
 
+import { canSee, scopeFor } from "../access";
 import { guestSuggestions, splitAudience } from "../audience";
 import type { Context } from "../context";
 import { CONFIRM_AT, PLAY_AT } from "../cycle";
 import { findGame, findNextGame, type GameSummary } from "../games";
 import { protectedProcedure } from "../index";
 import { confirmIfReady } from "../jobs/rsvp-cycle";
+import { listAskedFor } from "../mail";
 import { isAdmin, nameKeyOf } from "../run";
 import { addRow, answerRow, promote, waitlistOrder } from "../waitlist";
 
@@ -65,7 +67,7 @@ async function listGame(
 
 	// Who has not said a word. Only the server can work this out -- the client
 	// never sees a user id -- and it is the number the morning reminder is about.
-	const active = await listRecipients(db, "active");
+	const active = await listAskedFor(db, game.groupId);
 	const split = splitAudience(
 		rows.map((r) => ({
 			name: r.name,
@@ -203,9 +205,18 @@ async function requireSpot(db: Context["db"], userId: string) {
 	}
 }
 
-async function requireGame(db: Context["db"], id: string) {
+/**
+ * A night the caller may answer: it exists, it is in one of their groups,
+ * and it was not called off. One outside their groups reads as not there at
+ * all -- the same answer as a made-up id, so an id cannot be probed.
+ */
+async function requireGame(
+	db: Context["db"],
+	person: { id: string; role?: string | null },
+	id: string,
+) {
 	const game = await findGame(db, id);
-	if (!game) {
+	if (!game || !canSee(game, await scopeFor(db, person))) {
 		throw new ORPCError("NOT_FOUND", {
 			message: "That night is not on the schedule.",
 		});
@@ -232,10 +243,12 @@ export const rsvpRouter = {
 	list: protectedProcedure
 		.input(z.object({ gameId: z.string().min(1).optional() }))
 		.handler(async ({ context, input }) => {
+			const scope = await scopeFor(context.db, context.person);
 			const game = input.gameId
 				? await findGame(context.db, input.gameId)
-				: await findNextGame(context.db);
-			return game ? listGame(context.db, game, context.session.user.id) : null;
+				: await findNextGame(context.db, scope);
+			if (!game || !canSee(game, scope)) return null;
+			return listGame(context.db, game, context.session.user.id);
 		}),
 
 	/**
@@ -246,7 +259,7 @@ export const rsvpRouter = {
 	respond: protectedProcedure
 		.input(z.object({ gameId: z.string().min(1), answer: answerSchema }))
 		.handler(async ({ context, input }) => {
-			const game = await requireGame(context.db, input.gameId);
+			const game = await requireGame(context.db, context.person, input.gameId);
 			const me = context.session.user;
 			// Saying no never needs a spot; saying yes does.
 			if (input.answer === "out") {
@@ -310,7 +323,7 @@ export const rsvpRouter = {
 	add: protectedProcedure
 		.input(z.object({ gameId: z.string().min(1), name: nameSchema }))
 		.handler(async ({ context, input }) => {
-			const game = await requireGame(context.db, input.gameId);
+			const game = await requireGame(context.db, context.person, input.gameId);
 			const me = context.session.user;
 			await requireHere(context.db, me.id);
 
@@ -399,7 +412,7 @@ export const rsvpRouter = {
 			}),
 		)
 		.handler(async ({ context, input }) => {
-			const game = await requireGame(context.db, input.gameId);
+			const game = await requireGame(context.db, context.person, input.gameId);
 			const me = context.session.user;
 			await requireHere(context.db, me.id);
 
@@ -451,7 +464,7 @@ export const rsvpRouter = {
 	removeGuest: protectedProcedure
 		.input(z.object({ gameId: z.string().min(1), id: z.string().min(1) }))
 		.handler(async ({ context, input }) => {
-			const game = await requireGame(context.db, input.gameId);
+			const game = await requireGame(context.db, context.person, input.gameId);
 			if (game.decidedAt) {
 				throw new ORPCError("BAD_REQUEST", {
 					message:

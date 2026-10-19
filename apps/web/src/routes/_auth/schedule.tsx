@@ -49,8 +49,14 @@ function NightCard({ game }: { game: Game }) {
 					{game.dateLabel}
 				</span>
 				<span className="display tnum text-[34px]">{game.timeLabel}</span>
-				<span className="self-start rounded-full bg-raised px-2.5 py-0.5 font-semibold text-[13px]">
-					{game.formatLabel}
+				{game.group ? (
+					<span className="font-semibold text-[15px] text-ink-soft">
+						{game.group.name}
+					</span>
+				) : null}
+				<span className="flex flex-wrap gap-1.5">
+					<span className="chip">{game.formatLabel}</span>
+					{game.revco ? <span className="chip-revco">RevCo</span> : null}
 				</span>
 			</div>
 			<div className="flex flex-col gap-0.5">

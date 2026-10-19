@@ -124,6 +124,35 @@ pnpm --filter web exec wrangler d1 execute DB --remote --command "select link_to
 
 The oRPC procedures are `account.*`, `games.*`, `gyms.*`, `permits.*`, `rsvp.*`, `people.*`, `mail.*`, `credits.*` and `checkin.*` under `packages/api/src/routers`. Admin-only procedures use `adminProcedure` from `packages/api/src/index.ts`; `games.*` and `rsvp.*` reads are `protectedProcedure`, so a stranger gets UNAUTHORIZED rather than the address of the gym. Every procedure is POST-only (`StrictGetMethodPlugin`): the RPC protocol would otherwise take GET with the input in the query string, and a Lax cookie rides along on a top-level GET, which turns any link into a click-to-act-as-you. There is no OpenAPI handler and no `/api/reference`. `/roster` is built from the `user` table by `people.roster`, ranked by nights actually played -- a `protectedProcedure` that deliberately returns less than the admin `people.list`: names, standing and counts, never addresses, tokens or the reason somebody is on a break. Rules and game conditions remain plain content in `apps/web/src/content/run.ts`.
 
+## Groups
+
+The group runs several kinds of night -- Sunday Night Volleyball, Saturday
+Night RevCo 6s, Advanced Level Random Days -- and each is for its own set of
+people. A **group** (`game_group`, managed on `/admin/groups`) is one of
+those: a name, plus the format (6 v 6 or 4 v 4), type (coed or reverse coed)
+and number of spots a night in it starts with. Every night is booked in a
+group; picking it on the booking form fills those in, and each can still be
+changed for that one night.
+
+- **Who sees what.** Players are put in groups on `/admin/groups` (Members),
+  on a player's page, or when they are added. A player sees -- on the home
+  page, the schedule, and a night's own page, even by direct link -- only the
+  nights in their groups, and only those groups' RSVP emails reach them; the
+  waitlist and the response record follow the same line. It is enforced on
+  the server (`packages/api/src/access.ts`); a night outside your groups
+  answers "not on the schedule", the same as one that does not exist.
+  Admins see every night, and get a group's emails only if they are in it.
+- **Somebody in no group sees no nights.** The Players table says so in
+  amber, and their home page tells them an admin adds them.
+- **Deleting a group** is refused while nights are booked in it; its
+  memberships go with it. Changing a group's defaults never touches nights
+  already booked.
+- Nights booked before groups existed have no group and stay open to all.
+- Six groups were seeded by migration 0005, all 6 v 6 with 42 spots, the
+  two RevCo ones reverse coed. Edit them to taste.
+- A gym holds one night at a time (`game_gym_date_time_uidx`), so two groups
+  can play at the same hour in different gyms.
+
 ## Credits and check-in
 
 One credit is one night played, and costs $5 (`CREDIT_PRICE` in `packages/api/src/run.ts`). Players pay Viroj (Venmo @Viroj7, or cash) and an admin turns the money into credits; the gym then charges them, one credit a night, when the admin closes the night at check-in.
@@ -289,12 +318,9 @@ for the group -- and the 12 approved mockups are in **`docs/handoff/`**, which
 is gitignored because it names the organizer and his payment handle (the
 original is `~/virojs-pickup-handoff.zip` on the maintainer's machine). Read
 `docs/handoff/README.md` before starting any of this. Credits and check-in
-are built (see "Credits and check-in"); the rest, in rough order:
+are built (see "Credits and check-in"), and so are groups, which took the
+place of the spec's skill levels (see "Groups"); the rest, in rough order:
 
-- **Skill levels**, set by admins (recreational < intermediate < advanced),
-  with nights gated by minimum level **on the server**, for listing and RSVP.
-- **Night type** per night: coed or reverse coed, with the reverse-coed
-  rules shown on those nights. (Format and spots per night are built.)
 - **A cutoff per night**, enforced by the server. Today answers can change
   after the 1 PM verdict.
 - **In/out only**, if the group wants to drop "maybe".

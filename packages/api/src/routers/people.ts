@@ -2,6 +2,7 @@ import { ORPCError } from "@orpc/server";
 import { createAuth } from "@pickup-vball/auth";
 import { APIError } from "@pickup-vball/auth/errors";
 import { listBalances } from "@pickup-vball/db/credits";
+import { listMemberships, setGroupsOf } from "@pickup-vball/db/groups";
 import {
 	deactivate,
 	effectiveStatus,
@@ -140,15 +141,19 @@ export const peopleRouter = {
 	 * the other players about them.
 	 */
 	list: adminProcedure.handler(async ({ context }) => {
-		const [people, rates, balances] = await Promise.all([
+		const [people, rates, balances, memberships] = await Promise.all([
 			listPeople(context.db),
 			readResponseRates(context.db),
 			listBalances(context.db),
+			listMemberships(context.db),
 		]);
 		return people.map((person) => ({
 			...person,
 			responses: rates.get(person.id) ?? NO_RESPONSES,
 			balance: balances.get(person.id) ?? 0,
+			groupIds: memberships
+				.filter((m) => m.userId === person.id)
+				.map((m) => m.groupId),
 		}));
 	}),
 
@@ -204,7 +209,14 @@ export const peopleRouter = {
 
 	/** Add somebody and email them their way in. Admin only. */
 	add: adminProcedure
-		.input(z.object({ email: emailSchema, name: nameSchema.optional() }))
+		.input(
+			z.object({
+				email: emailSchema,
+				name: nameSchema.optional(),
+				/** Which groups' nights they will see. None means none yet. */
+				groupIds: z.array(z.string().min(1)).max(50).default([]),
+			}),
+		)
 		.handler(async ({ context, input }) => {
 			const email = input.email.trim().toLowerCase();
 			const name = input.name?.trim() || email.split("@")[0] || email;
@@ -231,6 +243,9 @@ export const peopleRouter = {
 				}
 				throw error;
 			}
+			if (input.groupIds.length > 0) {
+				await setGroupsOf(context.db, userId, input.groupIds);
+			}
 			await getMailer().unblock(email);
 			const outcome = await sendWelcome(context.db, userId, { email, name });
 			return {
@@ -238,6 +253,20 @@ export const peopleRouter = {
 				emailed: outcome.ok,
 				dryRun: getMailer().dryRun,
 			};
+		}),
+
+	/** Which groups somebody is in, all at once. Admin only. */
+	setGroups: adminProcedure
+		.input(
+			z.object({
+				userId: z.string().min(1),
+				groupIds: z.array(z.string().min(1)).max(50),
+			}),
+		)
+		.handler(async ({ context, input }) => {
+			await requirePerson(context.db, input.userId);
+			await setGroupsOf(context.db, input.userId, input.groupIds);
+			return { ok: true };
 		}),
 
 	/** Send someone their sign-in link again. Admin only. */

@@ -8,6 +8,7 @@ import {
 } from "drizzle-orm/sqlite-core";
 
 import { user } from "./auth";
+import { GAME_FORMATS, gameGroup, NIGHT_TYPES } from "./group";
 import { gym } from "./gym";
 import { permit } from "./permit";
 
@@ -20,12 +21,12 @@ import { permit } from "./permit";
 export const GAME_STATUSES = ["scheduled", "confirmed", "canceled"] as const;
 export type GameStatus = (typeof GAME_STATUSES)[number];
 
-/**
- * How a night is played. Chosen when it is booked: a 4 v 4 night is planned
- * that way, not what a short 6 v 6 night turns into.
- */
-export const GAME_FORMATS = ["6v6", "4v4"] as const;
-export type GameFormat = (typeof GAME_FORMATS)[number];
+export {
+	GAME_FORMATS,
+	type GameFormat,
+	NIGHT_TYPES,
+	type NightType,
+} from "./group";
 
 /** A booked night. Only exists once a gym has been rented. */
 export const game = sqliteTable(
@@ -47,7 +48,20 @@ export const game = sqliteTable(
 			.notNull()
 			.references(() => gym.id, { onDelete: "restrict" }),
 		notes: text("notes"),
+		/**
+		 * Which group the night is for, and so who can see it and who is
+		 * emailed about it. Required for every night booked since groups
+		 * exist; null only on nights from before, which stay open to all.
+		 * `restrict`: a group with nights cannot be deleted, and the router
+		 * says so in words before D1 has to.
+		 */
+		groupId: text("group_id").references(() => gameGroup.id, {
+			onDelete: "restrict",
+		}),
 		format: text("format", { enum: GAME_FORMATS }).notNull().default("6v6"),
+		nightType: text("night_type", { enum: NIGHT_TYPES })
+			.notNull()
+			.default("coed"),
 		/**
 		 * How many can say they're in. Set per night when it is booked; a
 		 * player's yes past it is refused, an admin's is not.
@@ -105,8 +119,14 @@ export const game = sqliteTable(
 			.notNull(),
 	},
 	(table) => [
-		uniqueIndex("game_date_time_uidx").on(table.date, table.startTime),
+		// One night per gym at a time. Two groups can play at once, in two gyms.
+		uniqueIndex("game_gym_date_time_uidx").on(
+			table.gymId,
+			table.date,
+			table.startTime,
+		),
 		index("game_date_idx").on(table.date),
 		index("game_gym_idx").on(table.gymId),
+		index("game_group_idx").on(table.groupId),
 	],
 );

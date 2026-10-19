@@ -176,7 +176,7 @@ async function tellPromoted(
 				dateLabel: game.dateLabel,
 				timeLabel: game.timeLabel,
 				location: game.location,
-				formatLabel: game.formatLabel,
+				formatLabel: game.kindLabel,
 				siteUrl: siteUrl(),
 				guestName: row.userId ? null : row.name,
 			}),

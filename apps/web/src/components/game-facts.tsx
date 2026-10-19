@@ -1,6 +1,10 @@
 import type { Headcount } from "@pickup-vball/api/routers/rsvp";
 
 import { clockLabel } from "@/components/rsvp-status";
+import { rules } from "@/content/run";
+
+/** The house rule a reverse coed night shows on its own page. */
+const REVCO_RULE = rules.find((r) => r.title === "Reverse coed nights")?.body;
 
 type Game = Headcount["game"];
 
@@ -62,7 +66,7 @@ export function GameFacts({ game }: { game: Game }) {
 				</svg>
 				<div className="flex flex-col">
 					<span className="font-semibold">
-						{game.timeLabel} · {game.formatLabel}
+						{game.timeLabel} · {game.kindLabel}
 					</span>
 					{closes && open ? (
 						<span className="text-[14px] text-subtle">
@@ -91,6 +95,14 @@ export function GameFacts({ game }: { game: Game }) {
 					Directions
 				</a>
 			</div>
+			{game.revco && REVCO_RULE ? (
+				<div className="mx-[18px] mb-4 rounded-field border-[1.5px] border-revco-line px-3.5 py-3">
+					<p className="m-0 font-bold font-heading text-[16px] text-revco-text uppercase tracking-[0.04em]">
+						Reverse coed
+					</p>
+					<p className="m-0 mt-1 text-[14px] text-ink-soft">{REVCO_RULE}</p>
+				</div>
+			) : null}
 			{/* How to get in, kept on the gym so it is right every week. */}
 			{game.gym.notes || game.notes || game.permit ? (
 				<div className="flex flex-col gap-1.5 border-raised border-t px-[18px] py-4 text-[14px] text-ink-soft">

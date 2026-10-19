@@ -24,6 +24,7 @@ const tabClass =
 
 const TABS = [
 	{ to: "/admin", label: "Nights", exact: true },
+	{ to: "/admin/groups", label: "Groups" },
 	{ to: "/admin/gyms", label: "Gyms" },
 	{ to: "/admin/permits", label: "Permits" },
 	{ to: "/admin/credits", label: "Give credits" },
