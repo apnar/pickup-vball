@@ -5,12 +5,8 @@ import {
 	listRecipients,
 } from "@pickup-vball/db/people";
 import { user } from "@pickup-vball/db/schema/auth";
-import {
-	RSVP_RESPONSES,
-	type RsvpResponse,
-	rsvp,
-} from "@pickup-vball/db/schema/rsvp";
-import { and, asc, desc, eq, isNull, ne, sql } from "drizzle-orm";
+import { RSVP_ANSWERS, rsvp } from "@pickup-vball/db/schema/rsvp";
+import { and, asc, desc, eq, isNull, ne } from "drizzle-orm";
 import { z } from "zod";
 
 import { guestSuggestions, splitAudience } from "../audience";
@@ -20,6 +16,7 @@ import { findGame, findNextGame, type GameSummary } from "../games";
 import { protectedProcedure } from "../index";
 import { confirmIfReady } from "../jobs/rsvp-cycle";
 import { isAdmin, nameKeyOf } from "../run";
+import { addRow, answerRow, promote, waitlistOrder } from "../waitlist";
 
 const nameSchema = z
 	.string()
@@ -31,7 +28,7 @@ const nameSchema = z
 	// neutralises them anyway; this just says no at the box.
 	.refine((v) => !/[{}]/.test(v), "Names can't contain { or }.");
 
-const answerSchema = z.enum(RSVP_RESPONSES);
+const answerSchema = z.enum(RSVP_ANSWERS);
 
 async function listGame(
 	db: Context["db"],
@@ -54,6 +51,12 @@ async function listGame(
 		.leftJoin(user, eq(rsvp.addedBy, user.id))
 		.where(eq(rsvp.gameId, game.id))
 		.orderBy(asc(rsvp.createdAt));
+
+	// Place in line, 1 for the front. Its own read because the line is
+	// ordered by when each row joined it, not by when the row was made.
+	const line = await waitlistOrder(db, game.id);
+	const place = new Map(line.map((id, i) => [id, i + 1]));
+	const meRow = userId ? rows.find((r) => r.userId === userId) : undefined;
 
 	// Asked of D1, not of `session.user`: the session cookie caches the user
 	// for five minutes, and a stale copy here would leave somebody who just
@@ -97,7 +100,11 @@ async function listGame(
 		confirmAt: CONFIRM_AT,
 		playAt: PLAY_AT,
 		/** The caller's own row, so the board can mark it "you". */
-		me: (userId && rows.find((r) => r.userId === userId)?.id) || null,
+		me: meRow?.id ?? null,
+		/** Where the caller stands in line, or null when not waiting. */
+		myPlace: meRow ? (place.get(meRow.id) ?? null) : null,
+		/** Whether a new yes would wait in line rather than get a spot. */
+		full: split.yes >= game.capacity || split.waitlist > 0,
 		/** The caller's own state, so the board knows which button to show. */
 		viewer: state
 			? {
@@ -110,6 +117,7 @@ async function listGame(
 			in: split.yes,
 			maybe: split.maybe,
 			out: split.out,
+			waitlist: split.waitlist,
 			silent: split.silent,
 		},
 		silentNames: split.silentNames,
@@ -129,6 +137,8 @@ async function listGame(
 			id: r.id,
 			name: r.name,
 			response: r.response,
+			/** Place in line when waiting, 1 for the front. */
+			place: place.get(r.id) ?? null,
 			/** Whether the caller is allowed to change this one. */
 			mine: canSet(r, userId, false),
 			/** Somebody with no account, whom another player is vouching for. */
@@ -208,69 +218,6 @@ async function requireGame(db: Context["db"], id: string) {
 	return game;
 }
 
-function full(game: GameSummary): never {
-	throw new ORPCError("BAD_REQUEST", {
-		message: `The night is full: all ${game.capacity} spots are taken. If someone drops out, a spot opens up.`,
-	});
-}
-
-/**
- * SQL that is true while the night has a spot left. It rides in the same
- * statement as the write, so two people taking the last spot at once cannot
- * both get it. Written by hand with an alias: in a subquery drizzle leaves
- * column names unqualified, and they would resolve against the row being
- * written.
- */
-function roomOn(game: GameSummary) {
-	return sql`(select count(*) from rsvp as taken where taken.game_id = ${game.id} and taken.response = 'in') < ${game.capacity}`;
-}
-
-/**
- * Change an answer on an existing row. A new yes on a full night is refused,
- * unless an admin is giving it -- somebody has to be able to fix the sheet by
- * hand, and an admin who lets the night run over has decided to.
- */
-async function answerRow(
-	db: Context["db"],
-	game: GameSummary,
-	row: { id: string; response: RsvpResponse },
-	set: { response: RsvpResponse; userId?: string; addedBy?: string },
-	admin: boolean,
-) {
-	const takesSpot = set.response === "in" && row.response !== "in" && !admin;
-	const result = await db
-		.update(rsvp)
-		.set(set)
-		.where(and(eq(rsvp.id, row.id), takesSpot ? roomOn(game) : undefined))
-		.run();
-	if (takesSpot && result.meta.changes === 0) full(game);
-}
-
-/**
- * Put a new row on the sheet. An insert cannot carry a `where`, so a yes is
- * counted afterwards and taken back out if it was one too many. Two people
- * racing for the last spot can then both be turned away, which leaves a spot
- * open rather than the night over its number.
- */
-async function addRow(
-	db: Context["db"],
-	game: GameSummary,
-	values: typeof rsvp.$inferInsert,
-	admin: boolean,
-) {
-	await db.insert(rsvp).values(values);
-	if (values.response !== "in" || admin) return;
-	const taken = await db
-		.select({ n: sql<number>`count(*)` })
-		.from(rsvp)
-		.where(and(eq(rsvp.gameId, game.id), eq(rsvp.response, "in")))
-		.get();
-	if ((taken?.n ?? 0) > game.capacity) {
-		await db.delete(rsvp).where(eq(rsvp.id, values.id));
-		full(game);
-	}
-}
-
 /** The whole payload, freshly counted, after a write. */
 async function reread(context: Context, gameId: string, fallback: GameSummary) {
 	return listGame(
@@ -308,7 +255,6 @@ export const rsvpRouter = {
 				await requireSpot(context.db, me.id);
 			}
 
-			const admin = isAdmin(me);
 			const mine = await context.db
 				.select({ id: rsvp.id, response: rsvp.response })
 				.from(rsvp)
@@ -316,13 +262,7 @@ export const rsvpRouter = {
 				.get();
 
 			if (mine) {
-				await answerRow(
-					context.db,
-					game,
-					mine,
-					{ response: input.answer },
-					admin,
-				);
+				await answerRow(context.db, game, mine, { response: input.answer });
 			} else {
 				// Somebody may have typed your name in already, back when the box
 				// took any name. Claim it rather than colliding with the unique
@@ -334,34 +274,27 @@ export const rsvpRouter = {
 					.where(and(eq(rsvp.gameId, game.id), eq(rsvp.nameKey, nameKey)))
 					.get();
 				if (claimed) {
-					await answerRow(
-						context.db,
-						game,
-						claimed,
-						{ response: input.answer, userId: me.id },
-						admin,
-					);
+					await answerRow(context.db, game, claimed, {
+						response: input.answer,
+						userId: me.id,
+					});
 				} else {
-					await addRow(
-						context.db,
-						game,
-						{
-							id: crypto.randomUUID(),
-							gameId: game.id,
-							name: me.name,
-							nameKey,
-							response: input.answer,
-							userId: me.id,
-							addedBy: me.id,
-						},
-						admin,
-					);
+					await addRow(context.db, game, {
+						id: crypto.randomUUID(),
+						gameId: game.id,
+						name: me.name,
+						nameKey,
+						response: input.answer,
+						userId: me.id,
+						addedBy: me.id,
+					});
 				}
 			}
 
 			// The confirming yes takes effect immediately rather than at the
 			// next cron pass. Awaited rather than deferred: nothing plumbs an
 			// execution context to oRPC, and the cron would catch it anyway.
+			await promote(context.db, game);
 			await confirmIfReady(context.db, game.id);
 			return reread(context, game.id, game);
 		}),
@@ -447,6 +380,7 @@ export const rsvpRouter = {
 				);
 			}
 
+			await promote(context.db, game);
 			await confirmIfReady(context.db, game.id);
 			return reread(context, game.id, game);
 		}),
@@ -499,9 +433,10 @@ export const rsvpRouter = {
 				game,
 				row,
 				{ response: input.answer },
-				isAdmin(me),
+				isAdmin(me) && row.userId !== me.id,
 			);
 
+			await promote(context.db, game);
 			await confirmIfReady(context.db, game.id);
 			return reread(context, game.id, game);
 		}),
@@ -554,8 +489,10 @@ export const rsvpRouter = {
 
 			await context.db.delete(rsvp).where(eq(rsvp.id, row.id));
 
-			// No confirmIfReady: this can only lower the count, and stage 03
-			// fires once and never un-fires.
+			// A guest who was in leaves a spot for the front of the line. No
+			// confirmIfReady past that: promoting only refills what was freed,
+			// and stage 03 fires once and never un-fires.
+			await promote(context.db, game);
 			return reread(context, game.id, game);
 		}),
 };

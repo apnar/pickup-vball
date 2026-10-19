@@ -8,4 +8,5 @@ export * from "./rsvp-final";
 export * from "./rsvp-last-call";
 export * from "./rsvp-nudge";
 export * from "./verify-email";
+export * from "./waitlist-in";
 export * from "./welcome";

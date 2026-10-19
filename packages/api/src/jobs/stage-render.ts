@@ -86,6 +86,7 @@ export function renderStage(input: {
 					: union(
 							split.inIds,
 							split.maybeIds,
+							split.waitlistIds,
 							split.silentIds,
 							split.sponsorIds,
 						),

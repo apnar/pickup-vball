@@ -36,6 +36,26 @@ describe("splitAudience", () => {
 		expect(split.sponsorIds).toEqual(["u-ana"]);
 	});
 
+	it("keeps the waitlist apart from the ins and the outs", () => {
+		const split = splitAudience(
+			[
+				row({ name: "Ana", userId: "u-ana" }),
+				row({ name: "Beth", userId: "u-beth", response: "waitlist" }),
+				row({ name: "Pat", addedBy: "u-chris", response: "waitlist" }),
+				row({ name: "Omar", userId: "u-omar", response: "out" }),
+			],
+			active,
+		);
+		expect(split.yes).toBe(1);
+		expect(split.out).toBe(1);
+		expect(split.waitlist).toBe(2);
+		expect(split.waitlistIds).toEqual(["u-beth"]);
+		// Somebody waiting has answered; the reminder is not for them.
+		expect(split.silentIds).toEqual(["u-chris"]);
+		// A waiting guest's sponsor hears if the night is called off.
+		expect(split.sponsorIds).toEqual(["u-chris"]);
+	});
+
 	it("does not accuse somebody of silence when a guest row has their name", () => {
 		const split = splitAudience(
 			[row({ name: "Ana", userId: "u-ana" }), row({ name: "beth " })],

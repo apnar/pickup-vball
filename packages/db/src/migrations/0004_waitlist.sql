@@ -1,0 +1,1 @@
+ALTER TABLE `rsvp` ADD `waitlisted_at` integer;

@@ -230,6 +230,7 @@ export const mailRouter = {
 						: union(
 								split.inIds,
 								split.maybeIds,
+								split.waitlistIds,
 								split.silentIds,
 								split.sponsorIds,
 							),

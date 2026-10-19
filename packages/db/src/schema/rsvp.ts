@@ -11,10 +11,18 @@ import { user } from "./auth";
 import { game } from "./game";
 
 /**
- * What somebody said. `maybe` is the day-of decision people have always
- * made informally: it keeps you on the emails and counts toward nothing.
+ * The three answers a person can give. `maybe` is the day-of decision people
+ * have always made informally: it keeps you on the emails and counts toward
+ * nothing.
  */
-export const RSVP_RESPONSES = ["in", "maybe", "out"] as const;
+export const RSVP_ANSWERS = ["in", "maybe", "out"] as const;
+export type RsvpAnswer = (typeof RSVP_ANSWERS)[number];
+
+/**
+ * What a row can say. `waitlist` is nobody's answer: it is where an "in"
+ * lands when the night is full, until a spot opens and it becomes one.
+ */
+export const RSVP_RESPONSES = [...RSVP_ANSWERS, "waitlist"] as const;
 export type RsvpResponse = (typeof RSVP_RESPONSES)[number];
 
 /**
@@ -47,6 +55,11 @@ export const rsvp = sqliteTable(
 		addedBy: text("added_by").references(() => user.id, {
 			onDelete: "set null",
 		}),
+		/**
+		 * When this row joined the waitlist; its place in line. Null unless
+		 * `response` is `waitlist`.
+		 */
+		waitlistedAt: integer("waitlisted_at", { mode: "timestamp_ms" }),
 		createdAt: integer("created_at", { mode: "timestamp_ms" })
 			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
 			.notNull(),

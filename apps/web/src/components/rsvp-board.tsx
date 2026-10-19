@@ -15,7 +15,12 @@ import {
 import SectionKicker from "@/components/section-kicker";
 import { initials } from "@/components/user-menu";
 import { useRsvps } from "@/hooks/use-rsvps";
-import { type RsvpAnswer, yourLine } from "@/lib/rsvp";
+import {
+	asAnswer,
+	type RowResponse,
+	type RsvpAnswer,
+	yourLine,
+} from "@/lib/rsvp";
 
 type Row = Headcount["rsvps"][number];
 
@@ -32,11 +37,26 @@ export function awayLine(viewer: Headcount["viewer"]): string {
 	}.`;
 }
 
-const GROUPS: { answer: RsvpAnswer; title: string }[] = [
+const GROUPS: { answer: RowResponse; title: string }[] = [
 	{ answer: "in", title: "Who’s in" },
+	{ answer: "waitlist", title: "Waitlist" },
 	{ answer: "maybe", title: "Maybe" },
 	{ answer: "out", title: "Out" },
 ];
+
+/**
+ * What the In cell says when it does something other than take a spot:
+ * where you are in line, or that tapping it joins the line.
+ */
+export function inLabelFor(
+	mine: RowResponse | null,
+	place: number | null,
+	full: boolean,
+): string | undefined {
+	if (mine === "waitlist") return place ? `Waitlist #${place}` : "Waitlist";
+	if (full && mine !== "in") return "Join waitlist";
+	return undefined;
+}
 
 /**
  * The next night: its card with your answer on it, who is coming, and the
@@ -75,7 +95,7 @@ export default function RsvpBoard() {
 		);
 	}
 
-	const { game, me, viewer, rsvps } = headcount;
+	const { game, me, viewer, rsvps, myPlace, full } = headcount;
 	const away = viewer?.status === "suspended";
 	// Once the verdict is in, the sheet is a record rather than a question.
 	const locked = game.status === "canceled" || Boolean(game.decidedAt);
@@ -132,12 +152,13 @@ export default function RsvpBoard() {
 							<ResponsePicker
 								name="my-response"
 								legend={`Your answer, ${session?.user.name}`}
-								value={mine}
+								value={asAnswer(mine)}
 								disabled={isPending || locked}
 								onPick={(answer) => respond(answer)}
+								inLabel={inLabelFor(mine, myPlace, full)}
 							/>
 							<p className="m-0 text-[14px] text-subtle">
-								{yourLine(mine, locked)}
+								{yourLine(mine, locked, myPlace, full)}
 							</p>
 						</div>
 					)}
@@ -205,7 +226,10 @@ export function Roster({
 	return (
 		<section aria-labelledby="roster-h" className="flex flex-col gap-6">
 			{GROUPS.map(({ answer, title }) => {
-				const rows = rsvps.filter((r) => r.response === answer);
+				const rows = rsvps
+					.filter((r) => r.response === answer)
+					// The line in order; everything else as it was answered.
+					.sort((a, b) => (a.place ?? 0) - (b.place ?? 0));
 				if (rows.length === 0 && answer !== "in") return null;
 				return (
 					<div key={answer} className="flex flex-col gap-2.5">
@@ -264,13 +288,16 @@ function RosterChip({
 	onPick: (answer: RsvpAnswer) => void;
 }) {
 	// Whose guest this is, so the group knows who to ask about them.
-	const note = row.guest
+	const who = row.guest
 		? row.addedByName
 			? `Guest of ${row.addedByName}`
 			: "Guest"
 		: you
 			? "You"
 			: null;
+	const note = row.place
+		? [`#${row.place} in line`, who].filter(Boolean).join(" · ")
+		: who;
 	return (
 		<li className="flex min-w-0 flex-col gap-2 rounded-field bg-surface-alt px-2.5 py-2">
 			<div className="flex min-w-0 items-center gap-2.5">
@@ -302,7 +329,7 @@ function RosterChip({
 					size="small"
 					name={`rsvp-${row.id}`}
 					legend={`Answer for ${row.name}`}
-					value={row.response}
+					value={asAnswer(row.response)}
 					disabled={isPending}
 					onPick={onPick}
 				/>

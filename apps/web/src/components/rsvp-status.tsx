@@ -184,6 +184,9 @@ export function CountTiles({
 					["Maybe", counts.maybe, "text-ink"],
 					["Out", counts.out, "text-ink"],
 					["No reply", counts.silent, "text-subtle"],
+					...(counts.waitlist > 0
+						? ([["Waitlist", counts.waitlist, "text-ink"]] as const)
+						: []),
 				] as const
 			).map(([label, n, tone]) => (
 				<div

@@ -19,6 +19,7 @@ function players(n: number): string {
 }
 
 const ANSWER: Record<string, string> = {
+	waitlist: "Was on the waitlist",
 	maybe: "Said maybe",
 	out: "Said out",
 };

@@ -56,6 +56,7 @@ export function ResponsePicker({
 	size = "large",
 	legend,
 	pending = false,
+	inLabel,
 }: {
 	/** Radio group name. Must be unique on the page. */
 	name: string;
@@ -66,6 +67,8 @@ export function ResponsePicker({
 	legend: string;
 	/** The pick is provisional; something else records it. */
 	pending?: boolean;
+	/** Says what In does or did instead: "Join waitlist", "Waitlist #3". */
+	inLabel?: string;
 }) {
 	const large = size === "large";
 	return (
@@ -100,11 +103,13 @@ export function ResponsePicker({
 								checked={value === answer}
 								onChange={() => onPick(answer)}
 							/>
-							{large
-								? value === answer && !pending
-									? BIG_CHECKED[answer]
-									: BIG[answer]
-								: SMALL[answer]}
+							{answer === "in" && inLabel
+								? inLabel
+								: large
+									? value === answer && !pending
+										? BIG_CHECKED[answer]
+										: BIG[answer]
+									: SMALL[answer]}
 						</label>
 					);
 				})}

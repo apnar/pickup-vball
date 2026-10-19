@@ -8,6 +8,14 @@ import type { Headcount } from "@pickup-vball/api/routers/rsvp";
 
 export type RsvpAnswer = "in" | "maybe" | "out";
 
+/** What a row can say: an answer, or waiting in line for a spot. */
+export type RowResponse = RsvpAnswer | "waitlist";
+
+/** Waiting is a yes that has not got a spot yet, so the picker shows In. */
+export function asAnswer(response: RowResponse | null): RsvpAnswer | null {
+	return response === "waitlist" ? "in" : response;
+}
+
 export const ANSWERS: readonly RsvpAnswer[] = ["in", "maybe", "out"];
 
 export type Counts = Headcount["counts"];
@@ -51,6 +59,9 @@ export function subline(
 	}
 	if (status === "confirmed") {
 		const left = limits.capacity - counts.in;
+		if (counts.waitlist > 0) {
+			return `${counts.waitlist} on the waitlist. If you can’t make it after all, switch to out and the next person gets your spot.`;
+		}
 		if (left <= 0) {
 			return "If you can’t make it after all, switch to out so the spot can go to someone else.";
 		}
@@ -73,9 +84,16 @@ export function subline(
 }
 
 /** What the viewer's own answer means for them, under the picker. */
-export function yourLine(answer: RsvpAnswer | null, locked: boolean): string {
+export function yourLine(
+	answer: RowResponse | null,
+	locked: boolean,
+	place: number | null = null,
+	full = false,
+): string {
 	if (locked) return "This night has been decided, so answers are closed.";
 	switch (answer) {
+		case "waitlist":
+			return `You’re number ${place ?? "?"} on the waitlist. If a spot opens up, you’re moved in automatically and get an email.`;
 		case "in":
 			return "You’re in. If plans change, switch to out so your spot can go to someone else.";
 		case "maybe":
@@ -83,7 +101,9 @@ export function yourLine(answer: RsvpAnswer | null, locked: boolean): string {
 		case "out":
 			return "You’re out. Thanks for letting everyone know.";
 		default:
-			return "You haven’t answered yet.";
+			return full
+				? "The night is full. Tap In to join the waitlist."
+				: "You haven’t answered yet.";
 	}
 }
 

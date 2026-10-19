@@ -12,6 +12,7 @@ import {
 	rsvpLastCallEmail,
 	rsvpNudgeEmail,
 	verifyEmail,
+	waitlistInEmail,
 	welcomeEmail,
 } from "./templates";
 
@@ -236,5 +237,36 @@ describe("credits added", () => {
 			expect(r.html).toContain(PARAM.key);
 			expect(r.text).toContain(PARAM.unsubscribeUrl);
 		}
+	});
+});
+
+describe("off the waitlist", () => {
+	const base = {
+		gameId: "g-9",
+		dateLabel: "Tue, Oct 20",
+		timeLabel: "7:30 – 10:00 PM",
+		location: "Magruder High School",
+		formatLabel: "4 v 4",
+		siteUrl: site,
+	};
+	const you = waitlistInEmail(base);
+	const guest = waitlistInEmail({ ...base, guestName: "Pat <b>" });
+
+	it("tells the player they're in", () => {
+		expect(you.subject).toBe("You're in for Tue, Oct 20");
+		expect(you.text).toContain("you were next on the waitlist");
+		expect(you.text).toContain("Format: 4 v 4");
+	});
+
+	it("tells a sponsor their guest is in, escaped", () => {
+		expect(guest.subject).toBe("Pat <b> is in for Tue, Oct 20");
+		expect(guest.html).toContain("Pat &lt;b&gt;");
+		expect(guest.html).not.toContain("Pat <b>");
+	});
+
+	it("opens the night through the reader's own key, and records nothing", () => {
+		expect(you.html).toContain("%2Frsvp%2Fg-9");
+		expect(you.html).toContain(PARAM.key);
+		expect(you.html).not.toContain("%3Fa%3D");
 	});
 });

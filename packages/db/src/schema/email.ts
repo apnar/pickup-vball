@@ -13,6 +13,8 @@ export const EMAIL_KINDS = [
 	"rsvp_final",
 	/** Anything an admin types on /admin/email. */
 	"message",
+	/** A spot opened on a full night and the next on the waitlist got it. */
+	"waitlist_in",
 	/** One player's receipt when an admin adds credits they paid for. */
 	"credits_added",
 	/**

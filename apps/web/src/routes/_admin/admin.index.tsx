@@ -295,7 +295,11 @@ function AdminGamesPage() {
 													in
 												</span>
 												<span className="tnum text-subtle">
-													{left === 0 ? "Full" : `${left} spots left`}
+													{left === 0
+														? g.waitCount > 0
+															? `Full · ${g.waitCount} waiting`
+															: "Full"
+														: `${left} spots left`}
 												</span>
 											</div>
 											<div className="meter">

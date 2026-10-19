@@ -50,6 +50,7 @@ function selectGames(db: Db) {
 					fileName: permit.fileName,
 				},
 				inCount: sql<number>`(select count(*) from ${rsvp} where ${rsvp.gameId} = ${game.id} and ${rsvp.response} = 'in')`,
+				waitCount: sql<number>`(select count(*) from ${rsvp} where ${rsvp.gameId} = ${game.id} and ${rsvp.response} = 'waitlist')`,
 			})
 			.from(game)
 			// The gym join is inner: `game.gym_id` is NOT NULL, so a game without

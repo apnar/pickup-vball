@@ -6,6 +6,7 @@ import { isUniqueViolation } from "../db-errors";
 import { findGame, findNextGame, listGames } from "../games";
 import { adminProcedure, protectedProcedure } from "../index";
 import { DEFAULT_CAPACITY, MAX_CAPACITY } from "../run";
+import { promote } from "../waitlist";
 
 const dateSchema = z
 	.string()
@@ -101,7 +102,12 @@ export const gamesRouter = {
 					}),
 				})
 				.where(eq(game.id, id));
-			return findGame(context.db, id);
+			const updated = await findGame(context.db, id);
+			// More spots means the front of the line gets them now.
+			if (updated && changes.capacity !== undefined) {
+				await promote(context.db, updated);
+			}
+			return updated;
 		}),
 
 	remove: adminProcedure

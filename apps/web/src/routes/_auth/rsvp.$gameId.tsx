@@ -8,10 +8,10 @@ import { z } from "zod";
 import { dateParts, GameFacts } from "@/components/game-facts";
 import PageTitle from "@/components/page-title";
 import { ResponsePicker } from "@/components/response-picker";
-import { awayLine, Roster } from "@/components/rsvp-board";
+import { awayLine, inLabelFor, Roster } from "@/components/rsvp-board";
 import { RsvpStatus } from "@/components/rsvp-status";
 import { headcountOptions, useRsvps } from "@/hooks/use-rsvps";
-import type { RsvpAnswer } from "@/lib/rsvp";
+import type { RowResponse, RsvpAnswer } from "@/lib/rsvp";
 
 /**
  * Where every button in every cycle email lands, and the detail page for a
@@ -37,8 +37,9 @@ export const Route = createFileRoute("/_auth/rsvp/$gameId")({
 	component: RsvpConfirmPage,
 });
 
-const DONE: Record<RsvpAnswer, string> = {
+const DONE: Record<RowResponse, string> = {
 	in: "You’re in. See you there.",
+	waitlist: "You’re on the waitlist.",
 	maybe: "Saved as maybe.",
 	out: "You’re out. Thanks for letting us know.",
 };
@@ -61,7 +62,7 @@ function RsvpConfirmPage() {
 	const { headcount, isPending, respond, comeBack, backPending } =
 		useRsvps(gameId);
 	const [picked, setPicked] = useState<RsvpAnswer | null>(a ?? null);
-	const [done, setDone] = useState<RsvpAnswer | null>(null);
+	const [done, setDone] = useState<RowResponse | null>(null);
 
 	const state = headcount ?? data ?? null;
 
@@ -79,7 +80,7 @@ function RsvpConfirmPage() {
 		);
 	}
 
-	const { game, viewer, me, rsvps } = state;
+	const { game, viewer, me, rsvps, myPlace, full } = state;
 	const away = viewer?.status === "suspended";
 	const locked = game.status === "canceled" || Boolean(game.decidedAt);
 	const mine = me ? (rsvps.find((r) => r.id === me)?.response ?? null) : null;
@@ -152,14 +153,19 @@ function RsvpConfirmPage() {
 								<ResponsePicker
 									name="confirm-answer"
 									legend={
-										mine
-											? `Your answer is ${mine}. Change it?`
-											: "Pick your answer"
+										mine === "waitlist"
+											? `You’re number ${myPlace ?? "?"} on the waitlist. Change it?`
+											: mine
+												? `Your answer is ${mine}. Change it?`
+												: full
+													? "The night is full. In joins the waitlist."
+													: "Pick your answer"
 									}
 									value={picked}
 									disabled={isPending}
 									onPick={setPicked}
 									pending
+									inLabel={inLabelFor(mine, myPlace, full)}
 								/>
 								<Button
 									size="lg"
@@ -168,14 +174,20 @@ function RsvpConfirmPage() {
 									onClick={async () => {
 										if (!picked) return;
 										try {
-											await respond(picked);
-											setDone(picked);
+											const result = await respond(picked);
+											setDone(result?.myPlace ? "waitlist" : picked);
 										} catch {
 											// The toast already said so.
 										}
 									}}
 								>
-									{picked ? CONFIRM[picked] : "Pick an answer first"}
+									{picked === "in" && full && mine !== "in"
+										? mine === "waitlist"
+											? "Save: stay on the waitlist"
+											: "Save: join the waitlist"
+										: picked
+											? CONFIRM[picked]
+											: "Pick an answer first"}
 								</Button>
 								<p className="m-0 text-[14px] text-subtle">
 									Your answer is saved when you tap the button. Mail apps open

@@ -30,15 +30,21 @@ export type Split = {
 	yes: number;
 	maybe: number;
 	out: number;
+	/** In line for a spot on a full night. Not in, and not silent either. */
+	waitlist: number;
 	/** Active players who have not answered and are not already on the sheet. */
 	silent: number;
 	inNames: string[];
 	maybeNames: string[];
 	inIds: string[];
 	maybeIds: string[];
+	waitlistIds: string[];
 	silentIds: string[];
 	silentNames: string[];
-	/** Whoever typed in a guest who is in or maybe. They can pass word along. */
+	/**
+	 * Whoever typed in a guest who is in, maybe or waiting. They can pass word
+	 * along.
+	 */
 	sponsorIds: string[];
 };
 
@@ -51,6 +57,7 @@ export type Split = {
 export function splitAudience(rows: SheetRow[], active: Person[]): Split {
 	const ins = rows.filter((r) => r.response === "in");
 	const maybes = rows.filter((r) => r.response === "maybe");
+	const waiting = rows.filter((r) => r.response === "waitlist");
 
 	const answeredIds = new Set(
 		rows.map((r) => r.userId).filter((id): id is string => Boolean(id)),
@@ -70,7 +77,7 @@ export function splitAudience(rows: SheetRow[], active: Person[]): Split {
 
 	const sponsorIds = [
 		...new Set(
-			[...ins, ...maybes]
+			[...ins, ...maybes, ...waiting]
 				.filter((r) => r.userId === null && r.addedBy)
 				.map((r) => r.addedBy as string),
 		),
@@ -79,12 +86,14 @@ export function splitAudience(rows: SheetRow[], active: Person[]): Split {
 	return {
 		yes: ins.length,
 		maybe: maybes.length,
-		out: rows.length - ins.length - maybes.length,
+		out: rows.filter((r) => r.response === "out").length,
+		waitlist: waiting.length,
 		silent: silent.length,
 		inNames: ins.map((r) => r.name),
 		maybeNames: maybes.map((r) => r.name),
 		inIds: idsOf(ins),
 		maybeIds: idsOf(maybes),
+		waitlistIds: idsOf(waiting),
 		silentIds: silent.map((p) => p.id),
 		silentNames: silent.map((p) => p.name),
 		sponsorIds,

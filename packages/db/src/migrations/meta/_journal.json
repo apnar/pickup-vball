@@ -29,6 +29,13 @@
 			"when": 1792444695854,
 			"tag": "0003_night_format_and_spots",
 			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "6",
+			"when": 1792445832203,
+			"tag": "0004_waitlist",
+			"breakpoints": true
 		}
 	]
 }

@@ -204,8 +204,15 @@ keeping. Each night carries its own format (`6v6` or `4v4`, chosen when it
 is booked -- a 4 v 4 night is planned, not a short 6 v 6 one) and its own
 number of spots (`game.capacity`; the booking form offers 32, 42 and 56,
 from `CAPACITY_PICKS` in `packages/api/src/run.ts`). A player's yes on a full
-night is refused, in the same SQL statement that would write it; an admin's
-is not, so the sheet can still be fixed by hand. The
+night -- or on one where somebody is already waiting -- puts them on the
+**waitlist** instead (`rsvp.response = 'waitlist'`, in line by
+`waitlisted_at`), and they see their place on the board. Whenever a spot
+frees -- someone switches to out or maybe, a guest is taken off, an admin
+adds spots -- the front of the line is moved in and emailed (`waitlist_in`;
+for a guest, whoever added them). All of it is in
+`packages/api/src/waitlist.ts`. An admin fixing somebody else's row can still
+put them in past the number; an admin's own answer waits in line like
+anyone's. The
 times are fixed, not relative to each night's start: a night that starts
 earlier than 7:30 still gets every stage that falls before it, and past the
 start the verdict is recorded without emailing anybody.
@@ -298,8 +305,9 @@ and a setting to block RSVPs at zero credits (the group chose to allow
 negative balances for now).
 
 Answered so far: balances may go negative; walk-ins are people in the group,
-and guests without accounts are settled off the site. Still open, to answer
-before the matching piece is built: waitlist, late-drop policy, whether
+and guests without accounts are settled off the site; full nights have a
+waitlist that moves people in automatically. Still open, to answer before the
+matching piece is built: late-drop policy, whether
 players see their own level, SMS, extra reverse-coed rules. Mockups with no
 counterpart yet: the skill-level and format parts of `A-Sessions`,
 `A-Session`, `A-Admin`, `A-NewSession` and `A-PlayerDetail`.

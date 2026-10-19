@@ -171,6 +171,29 @@ file free of drizzle and `cloudflare:workers` — the web app bundles it.
   not write**. Mail clients prefetch link targets — the same reason
   `server/unsubscribe.ts` stopped acting on a GET.
 
+### Spots and the waitlist
+
+Each night has its own `capacity`. Every RSVP write that could take or free
+a spot goes through `packages/api/src/waitlist.ts`: `answerRow` and `addRow`
+decide in / waitlist, and `promote` -- run after every write and after an
+admin changes a night's spots -- moves the front of the line in and emails
+them. `waitlist` is a stored `rsvp.response`, never an answer a client can
+send (`RSVP_ANSWERS` is the input enum). Things that are easy to get wrong:
+
+- The spot check rides in the same `update` as the write (`spotFree`,
+  `nobodyWaiting`), with hand-written aliases in the subqueries -- drizzle
+  would leave the columns unqualified and they would resolve against the row
+  being written. A new row cannot carry a `where`, so `addRow` inserts, counts,
+  and moves itself to the line if it was one too many; a race can put both
+  racers in line, and `promote` then gives the spot to the first.
+- A yes on a night with people waiting joins the line even if a spot is
+  momentarily free; saying yes again while waiting keeps your place.
+- An admin's override is for fixing someone else's row, not for skipping the
+  line: their own answer waits like anyone's.
+- Everything that counts `'in'` (thresholds, check-in, attendance) already
+  ignores the line; `splitAudience` counts it separately, and a cancellation
+  reaches the waiting too.
+
 ### Credits and check-in
 
 `credit_entry` is the ledger and `check_in` the sheet at the gym;
