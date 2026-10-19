@@ -13,8 +13,9 @@ before starting work.
 
 Production state worth knowing before you test anything: there is no
 `BREVO_API_KEY` in production until "Launch status" says otherwise, so mail
-goes to the Worker log; and CI has no `CLOUDFLARE_API_TOKEN`, so it checks
-but does not deploy.
+goes to the Worker log. CI does deploy: every push to `main` applies
+pending D1 migrations to production and deploys the Worker, so a migration
+that is pushed is a migration that runs.
 
 ## Commands
 

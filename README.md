@@ -263,8 +263,8 @@ the group uses it:
 - [ ] **Add Viroj** on `/admin/users` and make him an admin; he should set a
       password too. Then add the players.
 - [ ] Book the gyms (`/admin/gyms`) and the first nights (`/admin`).
-- [ ] Add a `CLOUDFLARE_API_TOKEN` repository secret so pushes to `main`
-      deploy (see "Automatic deploys"). Until then, `pnpm run deploy`.
+- [x] Add a `CLOUDFLARE_API_TOKEN` repository secret so pushes to `main`
+      deploy (see "Automatic deploys"). Set 2026-10-19.
 - [ ] Check that the zone's WAF rate-limiting rules (Email, step 5) cover
       `vball.moco-pickup.com` as well as the basketball host.
 - [ ] Have Viroj review the house rules and the "how it works" facts in
@@ -326,7 +326,7 @@ One-time setup:
 
 `.github/workflows/deploy.yml` runs on every push and pull request. It lints with Biome, runs the unit tests, typechecks and builds. On pushes to `main` it then applies pending D1 migrations and deploys the Worker with Cloudflare's `wrangler-action`.
 
-It needs one repository secret, `CLOUDFLARE_API_TOKEN`: a Cloudflare API token created from the "Edit Cloudflare Workers" template with **D1: Edit** and **Workers R2 Storage: Edit** added. Set it with `gh secret set CLOUDFLARE_API_TOKEN` or in the repository's Actions secrets. Until the secret exists the deploy job skips with a warning instead of failing. The account id is in `apps/web/wrangler.jsonc`, so no account secret is needed.
+It needs one repository secret, `CLOUDFLARE_API_TOKEN`: a Cloudflare API token created from the "Edit Cloudflare Workers" template with **D1: Edit** and **Workers R2 Storage: Edit** added, and its zone resources set to `moco-pickup.com` so it can attach the custom domain. Set it with `gh secret set CLOUDFLARE_API_TOKEN` or in the repository's Actions secrets. Until the secret exists the deploy job skips with a warning instead of failing. The account id is in `apps/web/wrangler.jsonc`, so no account secret is needed.
 
 You can still deploy by hand with `pnpm run deploy`.
 
