@@ -113,7 +113,13 @@ function RsvpConfirmPage() {
 				</span>
 				<PageTitle
 					title={
-						done ? DONE[done] : locked ? "Answers are closed" : "Are you in?"
+						done
+							? DONE[done]
+							: game.status === "canceled"
+								? "Called off"
+								: locked
+									? "Answers are closed"
+									: "Are you in?"
 					}
 				/>
 			</div>
@@ -123,7 +129,9 @@ function RsvpConfirmPage() {
 					<Panel className="flex flex-col gap-4">
 						{locked ? (
 							<p className="m-0 text-ink-soft">
-								This night has been decided, so answers can no longer change.
+								{game.status === "canceled"
+									? "This night was called off, so there is nothing to answer."
+									: "Answers for this night are closed. Teams are made from whoever is in."}
 							</p>
 						) : away ? (
 							<div className="flex flex-col items-start gap-3 rounded-btn bg-warn-bg p-4 text-warn">

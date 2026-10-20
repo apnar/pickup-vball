@@ -3,7 +3,8 @@
 Viroj's Pickup: the site for an invite-only pickup volleyball group in
 Montgomery County, MD, served at **https://vball.moco-pickup.com**. The admin
 books school gyms most nights of the week; players see the nights, RSVP in,
-maybe or out, and get the address and the verdict by email.
+maybe or out, and get the address and the reminders by email or text. A
+night is never called off for its headcount: whoever is in plays.
 
 It started as a copy of [pickup-bball](https://github.com/apnar/pickup-bball)
 (the Monday basketball group on moco-pickup.com) and keeps its architecture:
@@ -49,7 +50,7 @@ The whole site runs as a single Cloudflare Worker on the free plan:
   - `/api/unsubscribe/:token` - one-click unsubscribe pages for list emails
   - `/api/telnyx/webhook` - Telnyx tells the app about bounces, complaints, delivery, and the texts people send back
   - `/api/health` - health check
-- A Cron Trigger runs the Worker's `scheduled` handler (`apps/web/src/server.ts`) every half hour. It runs the RSVP cycle: five emails on a fixed clock and the 1 PM verdict on whether a night is on. See "The RSVP cycle" below.
+- A Cron Trigger runs the Worker's `scheduled` handler (`apps/web/src/server.ts`) every half hour. It runs the RSVP cycle: three messages on a fixed clock, then answers close at 1 PM. See "The RSVP cycle" below.
 - The database is Cloudflare D1 (SQLite) accessed through Drizzle via the `DB` binding. Env vars, secrets and bindings come from `cloudflare:workers` (typed in `packages/env/env.d.ts`, which must match `apps/web/wrangler.jsonc`).
 
 ## Local development
@@ -172,21 +173,22 @@ Players hear about nights by email, by text, or both, and get in through the lin
 
 - **Who gets it.** The `user` table — the same rows that decide who is a player, because there is only one list. Admins add people on `/admin/users` (`source = 'admin'`); older rows came from the site form (`site`) and the old public sign-up (`signup`). Each person has an `unsubscribe_token` for the footer link and a `link_token` for the sign-in links, both plain text (they ride in every email anyway) and both stamped by the `user.create` hook, so nobody can exist without a way in.
 - **Which audience.** Cycle messages always go to **active** people only; somebody on a break does not need the reminders. The ad-hoc message on `/admin/email` offers **Active** (default) or **Everyone**, where Everyone also reaches people on a break. Neither audience ever includes anybody deactivated. `email_send.audience` records which was used. The one query behind all of it is `listRecipients` in `packages/db/src/people.ts`.
-- **Which channel.** On `/dashboard` each player picks Off, Email, Text or Both for each kind of message (`TOPICS` in `packages/api/src/notify.ts`: night calls, reminders to answer, night confirmed, on or off, off the waitlist, game-day reminder, a spot opened, low credit, credit receipts, group updates). No row in `notify_pref` means the default (email; the spot alert is off). The three about a night somebody said yes to -- confirmed, the verdict, off the waitlist -- cannot be Off. `channelsFor` turns a choice into channels and falls back rather than to nothing: text with no usable number goes by email, email that bounced goes by text. Sign-in links asked for on `/login`, the welcome and password emails always go by email.
+- **Which channel.** On `/dashboard` each player picks Off, Email, Text or Both for each kind of message (`TOPICS` in `packages/api/src/notify.ts`: night calls, reminders to answer, night called off, off the waitlist, game-day reminder, a spot opened, low credit, credit receipts, group updates). No row in `notify_pref` means the default (email; the spot alert is off). Two cannot be Off -- a night called off, and a spot off the waitlist -- because missing either sends somebody to the gym on the wrong night or keeps them home on the right one. `channelsFor` turns a choice into channels and falls back rather than to nothing: text with no usable number goes by email, email that bounced goes by text. Sign-in links asked for on `/login`, the welcome and password emails always go by email.
 - **Stepping away.** The footer of every list email links to `/api/unsubscribe/<token>`, which shows a form asking for how long and why; only the POST acts (mail clients prefetch link targets). Every email also carries our own `List-Unsubscribe` and `List-Unsubscribe-Post` headers pointing at the same POST, so a mail app's one-click unsubscribe lands as an open-ended break. Players can do the same thing from `/dashboard` or straight from the RSVP board, and come back from any of them in one tap.
 - **How a link signs you in.** Every link in a list email or text points at `/api/auth/link?k=<link_token>&to=<path>` (texts use `g=<night id>`, short for `to=/rsvp/<id>`), a GET endpoint added by the `email-link` plugin in `packages/auth/src/link.ts`. It finds the person, marks an unverified address verified, opens a session and redirects to `to` — which is checked by `safeReturnPath` and falls back to `/` for anything that points off this site. An unknown token lands on `/login?error=link`, a deactivated one on `/login?error=revoked`, an admin's with a password set on `/login?error=admin` (see "The one list"). The token is a bearer credential, so **the request log prints paths without query strings** and nothing else may log a URL. Click tracking is off on every email (`tracking_settings`), or Telnyx would rewrite each link -- token and all -- through its own domain. If a link does get out, "New link" on `/admin/users` (`people.rotateLink`) kills every link that person was ever sent and emails a fresh one.
 - **Personalisation.** Templates carry `{{ params.key }}`-style placeholders (`PARAM` in `packages/email/src/render.ts`); the mailer fills them in per recipient (`fillParams`) and sends one copy each, up to 1,000 per Telnyx batch request -- a full list is one subrequest. Texts keep the key a placeholder in the outbox and the drain fills it in as each one leaves, so no stored row is a live way in.
 - **Braces in what people type.** The mailer runs `sealTemplate` over the finished subject, HTML and text before filling anything in: a zero-width space after any `{` that opens a tag, except inside our own placeholders. Telnyx documents Liquid only for stored templates, which we never send, so this is insurance -- but the failure it insures against is a guest called `{% if %}` getting a whole cycle send rejected every half hour. Names also refuse braces at the box.
 - **What goes out.**
   - *Welcome* — when an admin adds someone, or resends their link from `/admin/users`, or a player asks for one from `/login`. Carries their concrete sign-in link, no list footer. Email only.
-  - *The five cycle messages* — sent by the Cron Trigger, described in "The RSVP cycle" below. An admin can fire any of them early from `/admin/email`, or resend one to a single person from `/admin/users`.
-  - *Game-day reminder* — a few hours (`REMINDER_LEAD_HOURS`) before a night that is on, to the people in. *A spot opened* — when a full night with nobody waiting has room again, at most hourly. *Low credit* — when closing a night takes somebody from two credits to one. All three in `packages/api/src/jobs/alerts.ts`.
+  - *The three cycle messages* — sent by the Cron Trigger, described in "The RSVP cycle" below. An admin can fire any of them early from `/admin/email`, or resend one to a single person from `/admin/users`.
+  - *Called off* — when an admin cancels a night on `/admin/email` (the gym is shut, the weather). Goes to everybody in the night's group, answered or not, and to whoever signed up a guest. Never sent for a headcount.
+  - *Game-day reminder* — a few hours (`REMINDER_LEAD_HOURS`) before every night not called off, to the people in, with the permit link for the front desk. *A spot opened* — when a full night with nobody waiting has room again, at most hourly. *Low credit* — when closing a night takes somebody from two credits to one. All three in `packages/api/src/jobs/alerts.ts`.
   - *Message* — anything an admin types on `/admin/email`, with a short "text version" for whoever takes group updates by text (blank means the subject). "Send to me first" delivers a test copy to the signed-in admin only, by text too if they have a number.
   - *Credits added* — the receipt to one player when an admin adds credits they paid for.
   - *Account* — Better Auth's password reset from `/forgot-password`, and the verification email left over from the sign-up era. These carry no unsubscribe link.
 - **Texts.** Every text is a row in `sms_out` first. A Worker on the free plan gets 50 outside calls a run and each text is one, so the first send in a request drains up to 30 as it finishes (`kickDrain`) and a once-a-minute cron drains 40 a run (`packages/api/src/jobs/sms-drain.ts`). The drain re-checks each person as it goes: a number removed, a STOP, a deactivation or a night already started turns the text into `skipped`. List texts queued between 9 PM and 8 AM ET wait for the morning (`textSendAfter`); codes and replies to somebody's own text go at once. Each template has a text sibling in `packages/email/src/texts.ts`, tested to fit two GSM-7 segments, and `toGsm` takes curly quotes and the like out on the way, since one would send the whole text as UCS-2 at three times the price.
 - **Phone numbers.** A player adds one on `/dashboard`: they tick the consent box (wording in `TEXTS.consent`, `apps/web/src/content/run.ts`), we text a 6-digit code, they type it back. Only an HMAC of the code is stored (`phone_check`); it lasts 10 minutes, five wrong tries kill it, and a number gets at most one code a minute and five a day. `user.phone` only ever holds a verified number, unique across the group, so a reply means one person. Admins can remove a number but never add one. US numbers only.
-- **Replies.** Replying IN, OUT or MAYBE (or yes/no/y/n) answers for the newest night we texted that person about that is still open (`pickNight` in `packages/api/src/sms-parse.ts`), through the same `recordAnswer` the site uses (`packages/api/src/answer.ts`). The whole message must be the answer -- "No problem, I'm in" is not a NO. The reply names the night and links to it. A night already decided says so and changes nothing, like the site. Anything else gets one explanation an hour; a number nobody verified gets nothing. STOP/START are answered by Telnyx and mirrored in `user.sms_opted_out_at`, so their texts go by email meanwhile. `sms_in` keys every inbound text by Telnyx's id, so a redelivered webhook is acted on once.
+- **Replies.** Replying IN, OUT or MAYBE (or yes/no/y/n) answers for the newest night we texted that person about that is still open (`pickNight` in `packages/api/src/sms-parse.ts`), through the same `recordAnswer` the site uses (`packages/api/src/answer.ts`). The whole message must be the answer -- "No problem, I'm in" is not a NO. The reply names the night and links to it. A night whose answers have closed says so and changes nothing, like the site. Anything else gets one explanation an hour; a number nobody verified gets nothing. STOP/START are answered by Telnyx and mirrored in `user.sms_opted_out_at`, so their texts go by email meanwhile. `sms_in` keys every inbound text by Telnyx's id, so a redelivered webhook is acted on once.
 - **Bounces.** Telnyx reports to `/api/telnyx/webhook` (`apps/web/src/server/telnyx-webhook.ts`, Ed25519-signed; without `TELNYX_PUBLIC_KEY` the route answers 404). A hard bounce (code 30001) or spam complaint sets `user.email_blocked_at`: somebody with a usable number keeps getting everything by text, somebody without is put on an **open-ended break**, as before -- never a deactivation. Coming back from a break, or "Try email again" on `/dashboard`, clears it. Telnyx keeps its own suppression list for those addresses; there is no API call to lift it from here.
 - **Sender.** "Viroj’s Pickup" <`info@moco-pickup.com`>, set in `packages/email/src/sender.ts`. Any address on a domain verified in Telnyx works.
 - **Not switched on yet.** Production has no `TELNYX_API_KEY`, so every email and text is printed to the Worker log instead of sent (Workers Logs, or `pnpm --filter web exec wrangler tail`). That includes the welcome emails with sign-in links, so until email is on, new players have to be let in by hand.
@@ -207,23 +209,24 @@ The templates, the Telnyx clients, the signature check and the text rules are pu
 ## The RSVP cycle
 
 Nothing is emailed when a night is booked. Each night asks the group on a
-fixed clock instead, and decides itself at 1 PM on the day, the confirmation
-deadline in the house rules.
+fixed clock instead, and answers close at 1 PM on the day, the confirmation
+deadline in the house rules. **There is no headcount in any of it**: a night
+is never confirmed or called off by its count, and whoever is in plays. The
+only thing that stops a night is an admin cancelling it by hand on
+`/admin/email`, for a reason a count cannot know.
 
 | # | When | Who | What |
 |---|---|---|---|
 | 01 | 5:00 PM the day before | everybody active | there is a night tomorrow; in, maybe or out |
-| 02 | 9:00 AM on the day, only under 12 in | only those who have not answered | the names already in, and how many short |
-| 03 | the moment the 12th yes lands | everyone in or maybe | the night is on |
-| 04 | 11:30 AM on the day, only under 12 in | the maybes and anyone who has not answered | last call |
-| 05 | 1:00 PM on the day | everyone who answered — and if it is off, everybody else | 8 or more in and it happens; fewer and it does not |
+| 02 | 9:00 AM on the day, unless full | only those who have not answered | the names already in, and the spots left |
+| 03 | 11:30 AM on the day, unless full | the maybes and anyone who has not answered | last call |
+| 04 | 1:00 PM on the day | nobody: nothing is sent | answers close and teams are made from whoever is in |
 
-`CONFIRM_AT` (12) and `PLAY_AT` (8, the fewest a night is played with)
-and the stage times live in
+The stage times live in
 `packages/api/src/cycle.ts`, and `/admin/cycle` renders that same array — so
 the write-up in the admin section cannot describe a schedule the job is not
 keeping. Each night carries its own format (`6v6` or `4v4`, chosen when it
-is booked -- a 4 v 4 night is planned, not a short 6 v 6 one) and its own
+is booked) and its own
 number of spots (`game.capacity`; the booking form offers 32, 42 and 56,
 from `CAPACITY_PICKS` in `packages/api/src/run.ts`). A player's yes on a full
 night -- or on one where somebody is already waiting -- puts them on the
@@ -237,28 +240,29 @@ put them in past the number; an admin's own answer waits in line like
 anyone's. The
 times are fixed, not relative to each night's start: a night that starts
 earlier than 7:30 still gets every stage that falls before it, and past the
-start the verdict is recorded without emailing anybody.
+start answers are closed without emailing anybody.
 
-An answer is **in, maybe or out**. A maybe counts toward nothing; it only
-decides who gets the 3:30 last call. Guest names typed onto the sheet
-count toward both thresholds, but nobody can email them,
-so a cancellation goes to whoever put them down.
+An answer is **in, maybe or out**. A maybe holds no spot; it only decides
+who gets the last call. Guest names typed onto the sheet take spots like
+anyone, but nobody can email them, so a cancellation goes to whoever put
+them down.
 
 Three rules keep the job honest, all of them in `packages/api/src/jobs/plan.ts`
 and unit-tested there:
 
-- **The opening call is never skipped.** A gym booked at one in the afternoon
+- **The opening call is never skipped.** A gym booked at ten in the morning
   still gets "there is a night tonight" before anything reminds anybody to
   answer.
 - **One stage per pass, the latest one due.** An overdue stage is abandoned,
-  not delivered late.
-- **Ninety minutes between sends, except the verdict.** The one email nobody
-  may miss is "tonight is off".
+  not delivered late; once answers have closed, a stage asking for one is
+  dropped.
+- **Ninety minutes between sends.** The close sends nothing, so it never
+  waits.
 
 Each stage stamps a column on `game` when it is *resolved* — sent **or**
 deliberately skipped — so a stage whose condition was not met is not retried
 every half hour. What actually went out is in `email_send`, one row per send.
-An admin can fire any stage early, or overrule the verdict, on `/admin/email`.
+An admin can fire any stage early, or cancel a night, on `/admin/email`.
 
 Every link in a cycle email lands on `/rsvp/<gameId>?a=<answer>`, which shows
 the answer and waits for a tap. It does not record anything on load: mail
@@ -320,8 +324,9 @@ original is `~/virojs-pickup-handoff.zip` on the maintainer's machine). Read
 are built (see "Credits and check-in"), and so are groups, which took the
 place of the spec's skill levels (see "Groups"); the rest, in rough order:
 
-- **A cutoff per night**, enforced by the server. Today answers can change
-  after the 1 PM verdict.
+- **A cutoff per night**, enforced by the server. Today the site's buttons
+  and text replies refuse after the 1 PM close, but `rsvp.respond` itself
+  still takes an answer.
 - **In/out only**, if the group wants to drop "maybe".
 
 Also from the spec but not built: admin-only notes on a player,

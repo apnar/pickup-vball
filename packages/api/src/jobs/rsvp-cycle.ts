@@ -14,10 +14,15 @@ import { and, asc, eq, gte, isNull, lte, ne } from "drizzle-orm";
 
 import { union } from "../audience";
 import type { Context } from "../context";
-import { CONFIRM_AT, PLAY_AT, STAGE, type StageKey } from "../cycle";
+import {
+	EMAIL_STAGE,
+	type EmailStageKey,
+	STAGE,
+	type StageKey,
+} from "../cycle";
 import { findGame, type GameSummary } from "../games";
 import { recordInvites } from "../invites";
-import { type ListSendResult, permitUrl, readSplit, sendToList } from "../mail";
+import { type ListSendResult, readSplit, sendToList } from "../mail";
 import { addDays, todayInRunTimezone } from "../run";
 import { planStage, type Stamps } from "./plan";
 import { renderStage, type StageRender } from "./stage-render";
@@ -31,7 +36,7 @@ export type StageOutcome = {
 	/** Queued a text instead of (or as well as) an email. */
 	texted?: number;
 	failed: number;
-	/** Resolved without emailing: the condition was not met, or R0. */
+	/** Resolved without emailing: the condition was not met, or the close. */
 	quiet?: string;
 };
 
@@ -43,36 +48,31 @@ export type CycleRunResult = {
 const stampsOf = (row: {
 	callAt: Date | null;
 	nudgeAt: Date | null;
-	confirmedAt: Date | null;
 	lastCallAt: Date | null;
 	decidedAt: Date | null;
 }): Stamps => ({
 	call: row.callAt,
 	nudge: row.nudgeAt,
-	confirmed: row.confirmedAt,
 	lastCall: row.lastCallAt,
-	final: row.decidedAt,
+	close: row.decidedAt,
 });
 
 /**
  * Claim a stage. The conditional update is the once-only lock, the same one
  * the old reminder job used: two overlapping runs cannot both see one change.
- * The status transition rides along in the same statement, so a game can
- * never be half-confirmed.
  */
 async function claim(
 	db: Db,
 	gameId: string,
 	stage: StageKey,
 	now: Date,
-	extra: { status?: "confirmed" | "canceled"; sending: boolean },
+	extra: { sending: boolean },
 ): Promise<boolean> {
 	const column = STAGE[stage].column;
 	const result = await db
 		.update(game)
 		.set({
 			[column]: now,
-			...(extra.status && { status: extra.status }),
 			...(extra.sending && { lastEmailAt: now }),
 		})
 		.where(and(eq(game.id, gameId), isNull(game[column])))
@@ -93,82 +93,18 @@ async function skipStage(db: Db, gameId: string, stage: StageKey, now: Date) {
 	await claim(db, gameId, stage, now, { sending: false });
 }
 
-/**
- * The yes that reaches CONFIRM_AT confirms the night, whatever time it lands.
- *
- * Called from the cron (which makes it correct on its own, and self-healing
- * within half an hour) and from every RSVP mutation (which only makes it
- * quick). The conditional claim is what lets both exist without a chance of
- * two "it's on" emails.
- */
-export async function confirmIfReady(
-	db: Db,
-	gameId: string,
-	now: Date = new Date(),
-): Promise<StageOutcome | null> {
-	const row = await db
-		.select({
-			id: game.id,
-			status: game.status,
-			callAt: game.callAt,
-			confirmedAt: game.confirmedAt,
-		})
-		.from(game)
-		.where(eq(game.id, gameId))
-		.get();
-	if (!row) return null;
-	if (row.confirmedAt !== null) return null;
-	if (row.status === "canceled") return null;
-	// Never announce a night the list has not been told about. A night booked
-	// three weeks out that enough regulars sign up for on the site should not
-	// fire "the night is on" before the invitation.
-	if (row.callAt === null) return null;
-
-	const summary = await findGame(db, gameId);
-	if (!summary) return null;
-
-	const split = await readSplit(db, gameId);
-	if (split.yes < CONFIRM_AT) return null;
-
-	if (
-		!(await claim(db, gameId, "confirmed", now, {
-			status: "confirmed",
-			sending: true,
-		}))
-	) {
-		return null;
-	}
-
-	const { rendered, text, audience } = renderStage({
-		stage: "confirmed",
-		game: summary,
-		split,
-		permitUrl: permitUrl(summary),
-		now,
-	});
-	return finish(
-		db,
-		gameId,
-		"confirmed",
-		{ rendered, text },
-		{
-			onlyPersonIds: audience,
-		},
-	);
-}
-
 /** Send, record, and hand back the outcome. Releases the lock on a throw. */
 async function finish(
 	db: Db,
 	gameId: string,
-	stage: StageKey,
+	stage: EmailStageKey,
 	out: Pick<StageRender, "rendered" | "text">,
 	opts: { onlyPersonIds?: string[] },
 ): Promise<StageOutcome> {
 	let result: ListSendResult | null;
 	try {
 		result = await sendToList(db, {
-			kind: STAGE[stage].kind,
+			kind: EMAIL_STAGE[stage].kind,
 			gameId,
 			rendered: out.rendered,
 			text: out.text,
@@ -206,81 +142,30 @@ async function runStage(
 	summary: GameSummary,
 	stage: StageKey,
 	now: Date,
-	silent: boolean,
 ): Promise<StageOutcome | null> {
-	const split = await readSplit(db, summary.id);
-	const short = split.yes < CONFIRM_AT;
-
-	if (stage === "final") {
-		const on = split.yes >= PLAY_AT;
-		// Already on and still on: the answer has not changed, so nobody needs
-		// a second email saying so. The decision is recorded either way.
-		const quiet = silent || (on && summary.status === "confirmed");
-		if (
-			!(await claim(db, summary.id, "final", now, {
-				status: on ? "confirmed" : "canceled",
-				sending: !quiet,
-			}))
-		) {
+	if (stage === "close") {
+		// Answers close and nobody is told: whoever is in plays, so there is
+		// no news in it. The stamp is what freezes the sheet.
+		if (!(await claim(db, summary.id, "close", now, { sending: false }))) {
 			return null;
 		}
-		if (quiet) {
-			return {
-				gameId: summary.id,
-				stage,
-				sent: 0,
-				failed: 0,
-				quiet: silent
-					? "Past the start; recorded only."
-					: "Already on and still on.",
-			};
-		}
-		const { rendered, text, audience } = renderStage({
-			stage: "final",
-			game: summary,
-			split,
-			permitUrl: permitUrl(summary),
-			now,
-			force: on ? "on" : "off",
-		});
-		return finish(
-			db,
-			summary.id,
-			"final",
-			{ rendered, text },
-			{
-				onlyPersonIds: audience,
-			},
-		);
-	}
-
-	if (silent) {
-		await skipStage(db, summary.id, stage, now);
 		return {
 			gameId: summary.id,
 			stage,
 			sent: 0,
 			failed: 0,
-			quiet: "Too late.",
+			quiet: "Answers closed.",
 		};
 	}
 
+	const split = await readSplit(db, summary.id);
+	// A full night has nobody to ask for a yes: one now would only join the
+	// line, and the spot alert is how the line hears about a free spot.
+	const full = split.yes >= summary.capacity;
+
 	if (stage === "call") {
-		const alreadyOn = !short;
-		if (
-			!(await claim(db, summary.id, "call", now, {
-				// Enough before we even asked: this one email does both jobs.
-				...(alreadyOn && { status: "confirmed" as const }),
-				sending: true,
-			}))
-		) {
+		if (!(await claim(db, summary.id, "call", now, { sending: true }))) {
 			return null;
-		}
-		if (alreadyOn) {
-			await db
-				.update(game)
-				.set({ confirmedAt: now })
-				.where(and(eq(game.id, summary.id), isNull(game.confirmedAt)));
 		}
 		// Write down who is being asked, before the asking. This snapshot is
 		// the only record that survives of who was on the roster that night and
@@ -291,7 +176,6 @@ async function runStage(
 			stage: "call",
 			game: summary,
 			split,
-			permitUrl: permitUrl(summary),
 			now,
 		});
 		return finish(
@@ -306,14 +190,14 @@ async function runStage(
 	}
 
 	if (stage === "nudge") {
-		if (!short || split.silentIds.length === 0) {
+		if (full || split.silentIds.length === 0) {
 			await skipStage(db, summary.id, stage, now);
 			return {
 				gameId: summary.id,
 				stage,
 				sent: 0,
 				failed: 0,
-				quiet: short ? "Everybody answered." : "Already have enough.",
+				quiet: full ? "Every spot is taken." : "Everybody answered.",
 			};
 		}
 		if (!(await claim(db, summary.id, stage, now, { sending: true }))) {
@@ -323,7 +207,6 @@ async function runStage(
 			stage: "nudge",
 			game: summary,
 			split,
-			permitUrl: null,
 			now,
 		});
 		return finish(
@@ -339,14 +222,14 @@ async function runStage(
 
 	// lastCall
 	const audience = union(split.silentIds, split.maybeIds);
-	if (!short || audience.length === 0) {
+	if (full || audience.length === 0) {
 		await skipStage(db, summary.id, stage, now);
 		return {
 			gameId: summary.id,
 			stage,
 			sent: 0,
 			failed: 0,
-			quiet: short ? "Nobody left to ask." : "Already have enough.",
+			quiet: full ? "Every spot is taken." : "Nobody left to ask.",
 		};
 	}
 	if (!(await claim(db, summary.id, stage, now, { sending: true })))
@@ -355,7 +238,6 @@ async function runStage(
 		stage: "lastCall",
 		game: summary,
 		split,
-		permitUrl: null,
 		now,
 	});
 	return finish(
@@ -381,10 +263,8 @@ export async function runRsvpCycle(
 			id: game.id,
 			date: game.date,
 			startTime: game.startTime,
-			status: game.status,
 			callAt: game.callAt,
 			nudgeAt: game.nudgeAt,
-			confirmedAt: game.confirmedAt,
 			lastCallAt: game.lastCallAt,
 			decidedAt: game.decidedAt,
 			lastEmailAt: game.lastEmailAt,
@@ -421,14 +301,10 @@ export async function runRsvpCycle(
 		if (plan.run) {
 			const summary = await findGame(db, row.id);
 			if (summary) {
-				const outcome = await runStage(db, summary, plan.run, now, plan.silent);
+				const outcome = await runStage(db, summary, plan.run, now);
 				if (outcome) acted.push(outcome);
 			}
 		}
-		// The confirming yes may have landed between passes without anybody
-		// touching the site since. This is the backstop for that.
-		const confirmed = await confirmIfReady(db, row.id, now);
-		if (confirmed) acted.push(confirmed);
 	}
 	return { acted };
 }

@@ -13,12 +13,11 @@ import { gym } from "./gym";
 import { permit } from "./permit";
 
 /**
- * Where a night stands. `scheduled` until the RSVP cycle decides: `confirmed`
- * the moment CONFIRM_AT say yes (or at the final call with PLAY_AT),
- * `canceled` at the final call with fewer. Both numbers live in
- * packages/api/src/cycle.ts.
+ * Where a night stands. A night is never called off for its count -- whoever
+ * is in plays -- so `canceled` only ever comes from an admin, by hand. Nights
+ * from before that rule may still say `canceled`, which is what happened.
  */
-export const GAME_STATUSES = ["scheduled", "confirmed", "canceled"] as const;
+export const GAME_STATUSES = ["scheduled", "canceled"] as const;
 export type GameStatus = (typeof GAME_STATUSES)[number];
 
 export {
@@ -87,10 +86,11 @@ export const game = sqliteTable(
 		 */
 		callAt: integer("call_at", { mode: "timestamp_ms" }),
 		nudgeAt: integer("nudge_at", { mode: "timestamp_ms" }),
-		/** Also the answer to "when did we reach CONFIRM_AT". Write-once. */
-		confirmedAt: integer("confirmed_at", { mode: "timestamp_ms" }),
 		lastCallAt: integer("last_call_at", { mode: "timestamp_ms" }),
-		/** Stamped even when the verdict email is deliberately suppressed. */
+		/**
+		 * When answers closed: the 1 PM stage, or an admin calling the night
+		 * off. Nothing is sent for it; the stamp is what freezes the sheet.
+		 */
 		decidedAt: integer("decided_at", { mode: "timestamp_ms" }),
 		/**
 		 * When a cycle email actually left the building. Separate from the

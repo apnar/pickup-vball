@@ -13,15 +13,15 @@ export const nextHeadcountOptions = () =>
 export const headcountOptions = (gameId: string) =>
 	orpc.rsvp.list.queryOptions({
 		input: { gameId },
-		// Once the final call has passed and no verdict has landed, the cron is
-		// about to write one. Poll until it does, then stop.
+		// Once the close time has passed and the stamp has not landed, the cron
+		// is about to write it. Poll until it does, so the sheet locks, then stop.
 		refetchInterval: (query) => {
 			const data = query.state.data as Headcount | null | undefined;
 			if (!data || data.game.decidedAt || data.game.status === "canceled") {
 				return false;
 			}
-			const final = data.game.cycle.stages.find((s) => s.key === "final")?.at;
-			return final && Date.now() >= Date.parse(final) ? 15_000 : false;
+			const close = data.game.cycle.stages.find((s) => s.key === "close")?.at;
+			return close && Date.now() >= Date.parse(close) ? 15_000 : false;
 		},
 	});
 

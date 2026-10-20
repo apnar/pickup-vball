@@ -2,20 +2,19 @@ import { ORPCError } from "@orpc/server";
 import { outboxCounts } from "@pickup-vball/db/notify";
 import { EMAIL_AUDIENCES, emailSend } from "@pickup-vball/db/schema/email";
 import { game } from "@pickup-vball/db/schema/game";
-import { fillParams } from "@pickup-vball/email";
-import { getMailer, getTexter } from "@pickup-vball/email/worker";
-import { asc, desc, eq, gte } from "drizzle-orm";
+import { canceledEmail, canceledText, fillParams } from "@pickup-vball/email";
+import { getMailer, getTexter, siteUrl } from "@pickup-vball/email/worker";
+import { and, asc, desc, eq, gte, ne } from "drizzle-orm";
 import { z } from "zod";
 
 import { union } from "../audience";
 import type { Context } from "../context";
-import { STAGES, type StageKey } from "../cycle";
+import { EMAIL_STAGE, type EmailStageKey, STAGES } from "../cycle";
 import { findGame, listGames } from "../games";
 import { adminProcedure } from "../index";
 import { renderStage } from "../jobs/stage-render";
 import {
 	countRecipients,
-	permitUrl,
 	readSplit,
 	recipientCounts,
 	renderMessage,
@@ -27,7 +26,7 @@ import {
 const gameIdSchema = z.object({ gameId: z.string().min(1) });
 
 const stageSchema = z.enum(
-	STAGES.map((s) => s.key) as [StageKey, ...StageKey[]],
+	Object.keys(EMAIL_STAGE) as [EmailStageKey, ...EmailStageKey[]],
 );
 
 const messageSchema = z.object({
@@ -85,7 +84,6 @@ export const mailRouter = {
 				stage: input.stage,
 				game: found,
 				split,
-				permitUrl: permitUrl(found),
 				now: new Date(),
 			});
 			return {
@@ -113,16 +111,20 @@ export const mailRouter = {
 		)
 		.handler(async ({ context, input }) => {
 			const found = await requireGame(context.db, input.gameId);
+			if (found.status === "canceled") {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "That night was called off, so there is nothing to ask.",
+				});
+			}
 			const split = await readSplit(context.db, found.id);
 			const { rendered, text, audience } = renderStage({
 				stage: input.stage,
 				game: found,
 				split,
-				permitUrl: permitUrl(found),
 				now: new Date(),
 			});
 			const result = await sendToList(context.db, {
-				kind: STAGES.find((x) => x.key === input.stage)?.kind ?? "message",
+				kind: EMAIL_STAGE[input.stage].kind,
 				gameId: found.id,
 				rendered,
 				text,
@@ -195,55 +197,54 @@ export const mailRouter = {
 	}),
 
 	/**
-	 * Overrule the verdict. The 1 PM count is the rule and this is the
-	 * exception -- seven in and four maybes is a night a human might still
-	 * want to play.
+	 * Call a night off by hand. Never for the count -- whoever is in plays --
+	 * but for what a count cannot know: the gym is shut, the roads are ice.
+	 * It goes wider than anything in the cycle: someone who missed every
+	 * email is the one most likely to drive to a locked gym out of habit, and
+	 * a guest has no inbox here at all, so whoever signed one up hears too.
 	 */
-	callIt: adminProcedure
-		.input(gameIdSchema.extend({ decision: z.enum(["on", "off"]) }))
+	cancel: adminProcedure
+		.input(gameIdSchema)
 		.handler(async ({ context, input }) => {
 			const found = await requireGame(context.db, input.gameId);
-			const split = await readSplit(context.db, found.id);
+			if (found.closedAt) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "That night was played and closed at the gym.",
+				});
+			}
 			const now = new Date();
-			await context.db
+			// Conditional, so a double click cannot tell everybody twice.
+			const claimed = await context.db
 				.update(game)
-				.set({
-					status: input.decision === "on" ? "confirmed" : "canceled",
-					decidedAt: now,
-					...(input.decision === "on" && found.confirmedAt === null
-						? { confirmedAt: now }
-						: {}),
-					lastEmailAt: now,
-				})
-				.where(eq(game.id, found.id));
+				.set({ status: "canceled", decidedAt: now, lastEmailAt: now })
+				.where(and(eq(game.id, found.id), ne(game.status, "canceled")))
+				.run();
+			if (claimed.meta.changes !== 1) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "That night is already called off.",
+				});
+			}
 
-			const { rendered, text } = renderStage({
-				stage: "final",
-				game: {
-					...found,
-					status: input.decision === "on" ? "confirmed" : "canceled",
-				},
-				split,
-				permitUrl: permitUrl(found),
-				now,
-				force: input.decision,
-			});
+			const split = await readSplit(context.db, found.id);
+			const facts = {
+				dateLabel: found.dateLabel,
+				timeLabel: found.timeLabel,
+				location: found.location,
+				siteUrl: siteUrl(),
+			};
 			const result = await sendToList(context.db, {
-				kind: "rsvp_final",
+				kind: "canceled",
 				gameId: found.id,
-				rendered,
-				text,
+				rendered: canceledEmail(facts),
+				text: canceledText(facts),
 				sentBy: context.session.user.id,
-				onlyPersonIds:
-					input.decision === "on"
-						? union(split.inIds, split.maybeIds)
-						: union(
-								split.inIds,
-								split.maybeIds,
-								split.waitlistIds,
-								split.silentIds,
-								split.sponsorIds,
-							),
+				onlyPersonIds: union(
+					split.inIds,
+					split.maybeIds,
+					split.waitlistIds,
+					split.silentIds,
+					split.sponsorIds,
+				),
 			});
 			return (
 				result ?? {

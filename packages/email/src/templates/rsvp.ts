@@ -1,8 +1,8 @@
 /**
- * The five emails of the RSVP cycle. They share a shape -- the same facts
- * about the same night, differing only in what they ask of the reader -- so
- * they share a type and a few builders rather than repeating twelve fields
- * five times.
+ * The emails of the RSVP cycle. They share a shape -- the same facts about
+ * the same night, differing only in what they ask of the reader -- so they
+ * share a type and a few builders rather than repeating a dozen fields in
+ * each.
  */
 
 import { type RsvpAnswer, rsvpLink } from "../links";
@@ -29,22 +29,26 @@ export type RsvpFacts = {
 	inNames: string[];
 	maybeNames: string[];
 	inCount: number;
-	confirmAt: number;
-	playAt: number;
 	capacity: number;
 	/** "6 v 6" or "4 v 4": each night is booked as one or the other. */
 	formatLabel: string;
 	/**
-	 * When the verdict lands, "1:00 PM". Passed in from the cycle's own clock
+	 * When answers close, "1:00 PM". Passed in from the cycle's own clock
 	 * rather than written into the copy, so the emails cannot name a deadline
 	 * the job is not keeping.
 	 */
-	decideAt: string;
+	closeAt: string;
 };
 
 /** "1 person is" / "9 people are", for leads that start with the count. */
 export function peopleAre(n: number): string {
 	return n === 1 ? "1 person is" : `${n} people are`;
+}
+
+/** "1 spot" / "6 spots" still free. Never below none. */
+export function spotsLeft(facts: Pick<RsvpFacts, "inCount" | "capacity">) {
+	const n = Math.max(0, facts.capacity - facts.inCount);
+	return n === 1 ? "1 spot" : `${n} spots`;
 }
 
 const LABEL: Record<RsvpAnswer, string> = {

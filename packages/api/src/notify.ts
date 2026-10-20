@@ -21,8 +21,8 @@ export type TopicInfo = {
 	sub: string;
 	default: NotifyChannel;
 	/**
-	 * About a night they said yes to. Off is not offered: somebody who
-	 * misses that a night was cancelled drives to a locked gym.
+	 * Off is not offered: somebody who misses that a night was cancelled
+	 * drives to a locked gym.
 	 */
 	required: boolean;
 };
@@ -39,21 +39,14 @@ export const TOPICS: readonly TopicInfo[] = [
 	{
 		topic: "nudge",
 		label: "Reminders to answer",
-		sub: "The morning of, and a last call, while a night is short",
+		sub: "The morning of, and a last call, while there are spots left",
 		default: "email",
 		required: false,
 	},
 	{
-		topic: "confirmed",
-		label: "Night confirmed",
-		sub: "When enough are in that it's on",
-		default: "email",
-		required: true,
-	},
-	{
-		topic: "final",
-		label: "On or off",
-		sub: "The 1 PM verdict, including a cancellation",
+		topic: "canceled",
+		label: "Night called off",
+		sub: "If the organisers have to cancel (gym closed, weather)",
 		default: "email",
 		required: true,
 	},
@@ -110,15 +103,17 @@ export const KIND_TOPIC: Record<EmailKind, NotifyTopic> = {
 	rsvp_call: "call",
 	rsvp_nudge: "nudge",
 	rsvp_last_call: "nudge",
-	rsvp_confirmed: "confirmed",
-	rsvp_final: "final",
+	canceled: "canceled",
 	waitlist_in: "waitlist_in",
 	reminder: "reminder",
 	spot_open: "spot_open",
 	low_credit: "low_credit",
 	credits_added: "credits_added",
 	message: "message",
+	// Legacy kinds nothing sends any more.
 	announcement: "message",
+	rsvp_confirmed: "canceled",
+	rsvp_final: "canceled",
 };
 
 /** What a choice is worth for this topic: Off on a required one is not. */

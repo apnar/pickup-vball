@@ -28,7 +28,7 @@ import { asc, eq } from "drizzle-orm";
 
 import { type Split, splitAudience } from "./audience";
 import type { Context } from "./context";
-import { CONFIRM_AT, PLAY_AT, STAGE } from "./cycle";
+import { STAGE } from "./cycle";
 import type { GameSummary } from "./games";
 import { kickDrain } from "./jobs/sms-drain";
 import { channelsFor, choiceFor, KIND_TOPIC, textSendAfter } from "./notify";
@@ -61,7 +61,7 @@ export function permitUrl(game: GameSummary): string | null {
 	return game.permit ? `${siteUrl()}/api/permits/${game.permit.id}/file` : null;
 }
 
-/** Every fact the five cycle emails share about one night. */
+/** Every fact the cycle emails share about one night. */
 export function rsvpFacts(game: GameSummary, split: Split): RsvpFacts {
 	return {
 		gameId: game.id,
@@ -73,11 +73,9 @@ export function rsvpFacts(game: GameSummary, split: Split): RsvpFacts {
 		inNames: split.inNames,
 		maybeNames: split.maybeNames,
 		inCount: split.yes,
-		confirmAt: CONFIRM_AT,
-		playAt: PLAY_AT,
 		capacity: game.capacity,
 		formatLabel: game.kindLabel,
-		decideAt: formatGameTime(STAGE.final.at ?? "13:00"),
+		closeAt: formatGameTime(STAGE.close.at),
 	};
 }
 

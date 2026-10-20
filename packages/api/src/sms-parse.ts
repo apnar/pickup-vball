@@ -63,7 +63,7 @@ export type NightState = {
 
 /**
  * Which night a bare IN or OUT is about: the newest one we texted them
- * about that is still open. One that was decided already says so rather
+ * about that is still open. One whose answers have closed says so rather
  * than quietly answering an older night; one that started or was called
  * off is not a candidate at all.
  */

@@ -1,11 +1,7 @@
-import {
-	CYCLE_NUMBERS,
-	STAGE_COOLDOWN_MINUTES,
-	STAGES,
-} from "@pickup-vball/api/cycle";
+import { STAGE_COOLDOWN_MINUTES, STAGES } from "@pickup-vball/api/cycle";
 import { Panel } from "@pickup-vball/ui/components/panel";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 
 import PageTitle from "@/components/page-title";
 import SectionKicker from "@/components/section-kicker";
@@ -44,7 +40,7 @@ const pill = (tone: "ok" | "warn" | "danger" | "neutral" | "pending") =>
 /**
  * What the job does, rendered from the same constants the job reads. The
  * whole point of the page is that it cannot describe a schedule the code is
- * not keeping -- so nothing here is a hand-typed time or threshold.
+ * not keeping -- so nothing here is a hand-typed time.
  */
 function AdminCyclePage() {
 	const cycle = useQuery(orpc.mail.cycle.queryOptions());
@@ -85,29 +81,14 @@ function AdminCyclePage() {
 				<p className="mt-4 mb-0 max-w-[70ch] text-[14px] text-subtle">
 					Times are the gym's local time, and daylight saving is handled
 					automatically. Two RSVP emails about the same night never go out
-					within {STAGE_COOLDOWN_MINUTES} minutes of each other, except the
-					verdict, which is never held back.
+					within {STAGE_COOLDOWN_MINUTES} minutes of each other.
 				</p>
-			</div>
-
-			<div className="mt-10">
-				<SectionKicker>The numbers</SectionKicker>
-				<div className="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-4">
-					{CYCLE_NUMBERS.map((n) => (
-						<Panel key={n.label} className="flex flex-col gap-2">
-							<span className="display tnum text-[56px] text-amber">
-								{n.value}
-							</span>
-							<h3 className="m-0 text-[22px] leading-tight tracking-[0.02em]">
-								{n.label}
-							</h3>
-							<p className="m-0 text-[15px] text-ink-soft">{n.body}</p>
-						</Panel>
-					))}
-				</div>
-				<p className="mt-4 mb-0 max-w-[70ch] text-[14px] text-subtle">
-					A maybe does not count toward any of these numbers. It only decides
-					who gets the last call.
+				<p className="mt-2 mb-0 max-w-[70ch] text-[14px] text-subtle">
+					A night is never called off for being short: whoever is in plays. If
+					something else stops it, such as the gym closing, cancel it on the{" "}
+					<Link to="/admin/email">Email</Link> page and everyone in the group is
+					told. Each night has its own number of spots; once they are taken, a
+					yes joins the waitlist.
 				</p>
 			</div>
 
@@ -129,21 +110,9 @@ function AdminCyclePage() {
 												{g.timeLabel} · {g.gym}
 											</span>
 										</div>
-										<span
-											className={pill(
-												g.status === "confirmed"
-													? "ok"
-													: g.status === "canceled"
-														? "danger"
-														: "neutral",
-											)}
-										>
-											{g.status === "confirmed"
-												? "On"
-												: g.status === "canceled"
-													? "Off"
-													: "Not decided yet"}
-										</span>
+										{g.status === "canceled" ? (
+											<span className={pill("danger")}>Called off</span>
+										) : null}
 									</div>
 									<div className="tnum flex flex-wrap gap-x-5 gap-y-1 text-[14px] text-subtle">
 										<span>
@@ -183,7 +152,9 @@ function AdminCyclePage() {
 												{stage.sentAt
 													? ` · ${when(stage.sentAt)}`
 													: stage.doneAt
-														? " · skipped"
+														? stage.key === "close"
+															? ` · ${when(stage.doneAt)}`
+															: " · skipped"
 														: " · waiting"}
 												{stage.failed > 0 ? ` · ${stage.failed} failed` : ""}
 											</span>

@@ -1,18 +1,22 @@
 import type { Rendered } from "../telnyx";
-import { baseFacts, peopleAre, type RsvpFacts, render } from "./rsvp";
+import {
+	baseFacts,
+	peopleAre,
+	type RsvpFacts,
+	render,
+	spotsLeft,
+} from "./rsvp";
 
-export type RsvpNudgeInput = RsvpFacts & { needed: number };
-
-/** Stage 02. The day of, still short, and this reader has not answered. */
-export function rsvpNudgeEmail(input: RsvpNudgeInput): Rendered {
-	const needed = `${input.needed} more`;
+/** Stage 02. The day of, spots left, and this reader has not answered. */
+export function rsvpNudgeEmail(input: RsvpFacts): Rendered {
+	const left = spotsLeft(input);
 	return render({
-		subject: `Tonight: ${input.inCount} in, ${needed} needed. Are you coming?`,
+		subject: `Tonight: ${input.inCount} in, ${left} left. Are you coming?`,
 		title: "Are you coming tonight?",
 		kicker: "Tonight",
 		heading: "Are you coming tonight?",
-		lead: `${peopleAre(input.inCount)} in for tonight so far. ${needed} would confirm the night. Please let us know either way.`,
-		facts: [...baseFacts(input), { label: "Needed", value: needed }],
+		lead: `${peopleAre(input.inCount)} in for tonight so far. Please let us know either way by ${input.closeAt}.`,
+		facts: [...baseFacts(input), { label: "Spots left", value: left }],
 		notes: input.notes,
 		answers: ["in", "maybe", "out"],
 		tail: "This reminder only went to people who have not answered yet.",

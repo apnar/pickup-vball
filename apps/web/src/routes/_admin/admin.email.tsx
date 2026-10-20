@@ -1,4 +1,4 @@
-import { STAGES } from "@pickup-vball/api/cycle";
+import { EMAIL_STAGES } from "@pickup-vball/api/cycle";
 import { Button } from "@pickup-vball/ui/components/button";
 import { Input } from "@pickup-vball/ui/components/input";
 import { Label } from "@pickup-vball/ui/components/label";
@@ -89,8 +89,8 @@ function AdminEmailPage() {
 			onError,
 		}),
 	);
-	const callIt = useMutation(
-		orpc.mail.callIt.mutationOptions({
+	const cancel = useMutation(
+		orpc.mail.cancel.mutationOptions({
 			onSuccess: (result) => {
 				reportSend(result);
 				refreshAll();
@@ -126,7 +126,7 @@ function AdminEmailPage() {
 	const recipientCount = activeCount;
 	const messageCount = audience === "everyone" ? everyoneCount : activeCount;
 	const sending =
-		sendStage.isPending || callIt.isPending || sendMessage.isPending;
+		sendStage.isPending || cancel.isPending || sendMessage.isPending;
 
 	const confirmButton = (
 		key: string,
@@ -202,91 +202,80 @@ function AdminEmailPage() {
 												<span className="font-extrabold font-heading text-[26px] uppercase leading-none">
 													{g.dateLabel}
 												</span>
-												<span
-													className={pill(
-														g.status === "confirmed"
-															? "ok"
-															: g.status === "canceled"
-																? "danger"
-																: "neutral",
-													)}
-												>
-													{g.status === "confirmed"
-														? "Confirmed"
-														: g.status === "canceled"
-															? "Canceled"
-															: "Not decided"}
-												</span>
+												{g.status === "canceled" ? (
+													<span className={pill("danger")}>Called off</span>
+												) : null}
 												<span className="basis-full text-[14px] text-subtle">
 													{g.timeLabel} · {g.gym.name} ·{" "}
 													<span className="tnum">{g.inCount}</span> in
 												</span>
 											</div>
-											<ul className="m-0 flex list-none flex-col gap-2 border-raised border-t p-0 pt-3.5">
-												{STAGES.map((stage) => {
-													const key = `${stage.key}:${g.id}`;
-													const doneAt = g[stage.column] as
-														| string
-														| Date
-														| null;
-													return (
-														<li
-															key={stage.key}
-															className="flex flex-wrap items-center gap-2"
-														>
-															<span
-																className={`${pill(doneAt ? "ok" : "neutral")} mr-auto`}
-															>
-																{stage.num} {stage.title}
-																{doneAt ? ` · ${when(doneAt)}` : ""}
-															</span>
-															<Button
-																variant="ghost"
-																size="xs"
-																onClick={() =>
-																	previewStage.mutate({
-																		gameId: g.id,
-																		stage: stage.key,
-																	})
-																}
-															>
-																Preview
-															</Button>
-															{confirmButton(
-																key,
-																"Send now",
-																() =>
-																	sendStage.mutate({
-																		gameId: g.id,
-																		stage: stage.key,
-																	}),
-																preview?.key !== key,
-															)}
-														</li>
-													);
-												})}
-											</ul>
-											{/*
-											 * The automatic count is the rule; this is the
-											 * exception. A night a couple short with a few
-											 * maybes is one a person might still want to play.
-											 */}
-											<div className="flex flex-wrap items-center gap-2 border-raised border-t pt-3.5">
-												<span className="kicker mr-auto">Override</span>
-												{confirmButton(
-													`on:${g.id}`,
-													"Confirm the night",
-													() => callIt.mutate({ gameId: g.id, decision: "on" }),
-													false,
-												)}
-												{confirmButton(
-													`off:${g.id}`,
-													"Cancel the night",
-													() =>
-														callIt.mutate({ gameId: g.id, decision: "off" }),
-													false,
-												)}
-											</div>
+											{/* A night called off has nothing left to ask or cancel. */}
+											{g.status === "canceled" ? null : (
+												<>
+													<ul className="m-0 flex list-none flex-col gap-2 border-raised border-t p-0 pt-3.5">
+														{EMAIL_STAGES.map((stage) => {
+															const key = `${stage.key}:${g.id}`;
+															const doneAt = g[stage.column] as
+																| string
+																| Date
+																| null;
+															return (
+																<li
+																	key={stage.key}
+																	className="flex flex-wrap items-center gap-2"
+																>
+																	<span
+																		className={`${pill(doneAt ? "ok" : "neutral")} mr-auto`}
+																	>
+																		{stage.num} {stage.title}
+																		{doneAt ? ` · ${when(doneAt)}` : ""}
+																	</span>
+																	<Button
+																		variant="ghost"
+																		size="xs"
+																		onClick={() =>
+																			previewStage.mutate({
+																				gameId: g.id,
+																				stage: stage.key,
+																			})
+																		}
+																	>
+																		Preview
+																	</Button>
+																	{confirmButton(
+																		key,
+																		"Send now",
+																		() =>
+																			sendStage.mutate({
+																				gameId: g.id,
+																				stage: stage.key,
+																			}),
+																		preview?.key !== key,
+																	)}
+																</li>
+															);
+														})}
+													</ul>
+													{/*
+													 * Never for the count -- whoever is in plays -- but
+													 * for a shut gym or a snowstorm. There is no undo,
+													 * so the button asks twice like every send here.
+													 */}
+													<div className="flex flex-wrap items-center gap-2 border-raised border-t pt-3.5">
+														<span className="mr-auto text-[14px] text-subtle">
+															Gym closed or weather? Cancelling tells everyone
+															in the group.
+														</span>
+														{confirmButton(
+															`cancel:${g.id}`,
+															"Cancel the night",
+															() => cancel.mutate({ gameId: g.id }),
+															false,
+														)}
+													</div>
+												</>
+											)}
 										</Panel>
 									</li>
 								))}

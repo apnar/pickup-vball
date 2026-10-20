@@ -28,87 +28,62 @@ export function clockLabel(at: string | Date): string {
 	});
 }
 
-export function Verdict({ headcount }: { headcount: Headcount }) {
-	const { game, counts } = headcount;
-	if (game.status === "confirmed" && game.decidedAt) {
-		return (
-			<div className="flex flex-wrap items-baseline justify-between gap-3 rounded-btn bg-ok-bg px-4 py-3 text-ok">
-				<span className="display text-[26px]">It’s on</span>
-				<span className="tnum font-semibold text-[14px]">
-					Confirmed {clockLabel(game.decidedAt)} · {counts.in} in
-				</span>
-			</div>
-		);
-	}
-	if (game.status === "canceled") {
-		return (
-			<div className="flex flex-wrap items-baseline justify-between gap-3 rounded-btn bg-danger-bg px-4 py-3 text-danger">
-				<span className="display text-[26px]">Called off</span>
-				<span className="tnum font-semibold text-[14px]">
-					{game.decidedAt ? clockLabel(game.decidedAt) : "Today"} · {counts.in}{" "}
-					in
-				</span>
-			</div>
-		);
-	}
-	return null;
+/** The one thing that stops a night: an admin calling it off. */
+export function CalledOff({ headcount }: { headcount: Headcount }) {
+	if (headcount.game.status !== "canceled") return null;
+	return (
+		<div className="flex flex-wrap items-baseline justify-between gap-3 rounded-btn bg-danger-bg px-4 py-3 text-danger">
+			<span className="display text-[26px]">Called off</span>
+		</div>
+	);
 }
 
 export function Countdown({ headcount }: { headcount: Headcount }) {
 	const { game } = headcount;
-	const finalAt = stageAt(headcount, "final");
-	// Once it is on, counting down to a decision already made reads as though
-	// the night might still fall through. Point at the start instead. Once it
-	// is off, there is nothing left to count toward at all.
-	const on = game.status === "confirmed";
+	const closeAt = stageAt(headcount, "close");
+	// Until answers close, count down to that; after, to the start. The
+	// stamp is what moves it on, but the clock passing the close time does
+	// too, so the page does not wait for the cron to tell it.
 	const target =
-		game.status === "canceled" ? null : on ? game.cycle.startsAt : finalAt;
-	const what = on ? "the start" : "the RSVP closing";
+		game.status === "canceled"
+			? null
+			: !game.decidedAt && closeAt
+				? closeAt
+				: game.cycle.startsAt;
 	// Hooks run before the early return, always.
 	const now = useClock(headcount.now, target);
 
 	if (!target) return null;
-	const remaining = Date.parse(target) - now;
-
-	if (remaining <= 0) {
-		if (on) return null;
-		return (
-			<div role="timer" className="flex flex-col gap-1">
-				<span className="kicker">RSVP closed</span>
-				<span className="text-ink-soft">
-					The verdict is on its way by email.
-				</span>
-			</div>
-		);
-	}
+	const closing =
+		target === closeAt && closeAt !== null && now < Date.parse(closeAt);
+	const shown = closing ? target : game.cycle.startsAt;
+	const remaining = Date.parse(shown) - now;
+	if (remaining <= 0) return null;
 
 	// More than six hours out, a ticking clock is just noise.
 	const coarse = remaining > 6 * 60 * 60 * 1000;
 	return (
 		<div role="timer" className="flex flex-col gap-1">
-			<span className="kicker">{on ? "Starts" : "RSVP closes"}</span>
+			<span className="kicker">{closing ? "RSVP closes" : "Starts"}</span>
 			<span
 				aria-hidden="true"
 				className="tnum display text-[34px] leading-none"
 			>
-				{coarse ? clockLabel(target) : formatRemaining(remaining)}
+				{coarse ? clockLabel(shown) : formatRemaining(remaining)}
 			</span>
-			{coarse && !on ? (
-				<span aria-hidden="true" className="text-[14px] text-subtle">
-					{headcount.playAt} needed to play
-				</span>
-			) : null}
 			<span className="sr-only" aria-live="polite">
-				{announceRemaining(remaining, what)}
+				{announceRemaining(
+					remaining,
+					closing ? "the RSVP closing" : "the start",
+				)}
 			</span>
 		</div>
 	);
 }
 
-/** The big count, the fill bar and the one-line verdict on it. */
+/** The big count, the fill bar and the one-line summary of it. */
 export function RsvpMeter({ headcount }: { headcount: Headcount }) {
-	const { counts, capacity, confirmAt, playAt, game } = headcount;
-	const limits = { confirmAt, playAt, capacity };
+	const { counts, capacity, game } = headcount;
 	const pct = (n: number) => `${Math.min(100, (n / capacity) * 100)}%`;
 	// Maybes ride on top of the ins, and neither can push the bar past the end.
 	const maybeWidth = Math.max(0, Math.min(counts.maybe, capacity - counts.in));
@@ -126,40 +101,29 @@ export function RsvpMeter({ headcount }: { headcount: Headcount }) {
 				</span>
 			</div>
 			{/*
-			 * Solid for the ins, faded for the maybes, with small ticks where the
-			 * two numbers that matter fall. The graphic is hidden from screen
-			 * readers and carried by the sentence after it.
+			 * Solid for the ins, faded for the maybes. The graphic is hidden from
+			 * screen readers and carried by the sentence after it.
 			 */}
-			<div className="relative" aria-hidden="true">
-				<div className="meter relative">
-					<span
-						className="absolute inset-y-0 left-0"
-						style={{ width: pct(counts.in) }}
-					/>
-					<span
-						className="absolute inset-y-0 opacity-35"
-						style={{ left: pct(counts.in), width: pct(maybeWidth) }}
-					/>
-				</div>
-				{[playAt, confirmAt].map((n) => (
-					<span
-						key={n}
-						className="absolute top-[-3px] h-3 w-0.5 rounded-full bg-ink-soft"
-						style={{ left: pct(n) }}
-					/>
-				))}
+			<div className="meter relative" aria-hidden="true">
+				<span
+					className="absolute inset-y-0 left-0"
+					style={{ width: pct(counts.in) }}
+				/>
+				<span
+					className="absolute inset-y-0 opacity-35"
+					style={{ left: pct(counts.in), width: pct(maybeWidth) }}
+				/>
 			</div>
 			<p className="sr-only">
 				{counts.in} in, {counts.maybe} maybe, {counts.out} out, {counts.silent}{" "}
-				yet to answer. {playAt} needed to play, {confirmAt} to confirm,{" "}
-				{capacity} spots.
+				yet to answer. {capacity} spots.
 			</p>
 			<div className="flex flex-col gap-1">
 				<p className="m-0 font-semibold text-[17px]">
-					{headline(counts, limits, game.status, Boolean(game.decidedAt))}
+					{headline(counts, capacity, game.status)}
 				</p>
 				<p className="m-0 text-[14px] text-subtle">
-					{subline(counts, limits, game.status)}
+					{subline(counts, capacity, game.status)}
 				</p>
 			</div>
 		</div>
@@ -202,13 +166,13 @@ export function CountTiles({
 }
 
 /**
- * The whole status block: the verdict once there is one, the meter, the four
- * counts and the countdown to whatever happens next.
+ * The whole status block: a cancellation if there was one, the meter, the
+ * four counts and the countdown to whatever happens next.
  */
 export function RsvpStatus({ headcount }: { headcount: Headcount }) {
 	return (
 		<div className="flex flex-col gap-5">
-			<Verdict headcount={headcount} />
+			<CalledOff headcount={headcount} />
 			<RsvpMeter headcount={headcount} />
 			<CountTiles headcount={headcount} />
 			<Countdown headcount={headcount} />

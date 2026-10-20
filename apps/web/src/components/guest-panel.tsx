@@ -3,11 +3,10 @@ import { Button } from "@pickup-vball/ui/components/button";
 import { Input } from "@pickup-vball/ui/components/input";
 import { useState } from "react";
 
-import { useClock } from "@/hooks/use-countdown";
 import { guestLine } from "@/lib/rsvp";
 
 /**
- * Guests: who you are bringing, and whether the night needs more.
+ * Guests: who you are bringing, and whether there is room for them.
  *
  * The box is open whenever answers are; only the line above it changes, and
  * `guestLine` in lib/rsvp.ts says why. Nobody is stopped from putting a name
@@ -29,23 +28,10 @@ export function GuestPanel({
 	add: (name: string) => Promise<unknown>;
 	removeGuest: (rowId: string) => void;
 }) {
-	const { counts, confirmAt, playAt, capacity, game, rsvps } = headcount;
+	const { counts, capacity, rsvps } = headcount;
 	const [draft, setDraft] = useState("");
 
-	const lastCallAt =
-		game.cycle.stages.find((s) => s.key === "lastCall")?.at ?? null;
-	// Seeded from the payload, ticking in an effect, so the wording changes by
-	// itself at the last call without a reload and without a hydration
-	// mismatch.
-	const now = useClock(headcount.now, lastCallAt);
-	const lastCallPassed = lastCallAt ? now >= Date.parse(lastCallAt) : false;
-
-	const line = guestLine(
-		counts,
-		{ confirmAt, playAt, capacity },
-		lastCallPassed,
-		locked,
-	);
+	const line = guestLine(counts, capacity, locked);
 	const mine = rsvps.filter((r) => r.guest && r.mine);
 
 	return (

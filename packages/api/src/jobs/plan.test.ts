@@ -13,9 +13,8 @@ const at = (date: string, time: string) => runInstant(date, time);
 const stamps = (done: Partial<Stamps> = {}): Stamps => ({
 	call: null,
 	nudge: null,
-	confirmed: null,
 	lastCall: null,
-	final: null,
+	close: null,
 	...done,
 });
 
@@ -47,7 +46,7 @@ describe("the ordinary week", () => {
 		expect(p.skip).toEqual([]);
 	});
 
-	it("last-calls at half eleven, then decides at one", () => {
+	it("last-calls at half eleven, then closes answers at one", () => {
 		const done = {
 			stamps: stamps({
 				call: at("2026-09-13", "17:00"),
@@ -61,7 +60,7 @@ describe("the ordinary week", () => {
 				stamps: stamps({ ...done.stamps, lastCall: at(DATE, "11:30") }),
 				lastEmailAt: at(DATE, "11:30"),
 			}).run,
-		).toBe("final");
+		).toBe("close");
 	});
 
 	it("leaves ninety minutes between the reminder and the last call", () => {
@@ -84,7 +83,6 @@ describe("a gym booked late", () => {
 	it("tells the group it exists before reminding anyone about it", () => {
 		const p = plan(at(DATE, "10:00"));
 		expect(p.run).toBe("call");
-		expect(p.silent).toBe(false);
 	});
 
 	it("holds the next stage for ninety minutes", () => {
@@ -106,11 +104,10 @@ describe("a gym booked late", () => {
 	});
 });
 
-describe("the verdict is not optional", () => {
+describe("answers close at one", () => {
 	it("ignores the cooldown -- half an hour after a late last call", () => {
-		// A last call held by the cooldown until half twelve leaves the
-		// verdict well inside the ninety minutes. The day somebody makes
-		// `final` respect it, this test says whether anyone gets told.
+		// A last call held by the cooldown until half twelve leaves the close
+		// well inside the ninety minutes. It sends nothing, so nothing waits.
 		const p = plan(at(DATE, "13:00"), {
 			stamps: stamps({
 				call: at("2026-09-13", "17:00"),
@@ -119,25 +116,36 @@ describe("the verdict is not optional", () => {
 			}),
 			lastEmailAt: at(DATE, "12:30"),
 		});
-		expect(p.run).toBe("final");
+		expect(p.run).toBe("close");
 	});
 
-	it("records a missed verdict after the start but emails nobody", () => {
+	it("abandons a last call that never went out before the close", () => {
+		const p = plan(at(DATE, "13:00"), {
+			stamps: stamps({
+				call: at("2026-09-13", "17:00"),
+				nudge: at(DATE, "09:00"),
+			}),
+			lastEmailAt: at(DATE, "09:00"),
+		});
+		expect(p.run).toBe("close");
+		expect(p.skip).toEqual<StageKey[]>(["lastCall"]);
+	});
+
+	it("records a missed close after the start but emails nobody", () => {
 		const p = plan(at(DATE, "20:00"), {
 			stamps: stamps({ call: at("2026-09-13", "17:00") }),
 		});
-		expect(p.run).toBe("final");
-		expect(p.silent).toBe(true);
+		expect(p.run).toBe("close");
 		expect(p.skip).toEqual(expect.arrayContaining(["nudge", "lastCall"]));
 	});
 
-	it("goes quiet once the verdict is in", () => {
+	it("goes quiet once answers are closed", () => {
 		const p = plan(at(DATE, "21:00"), {
 			stamps: stamps({
 				call: at("2026-09-13", "17:00"),
 				nudge: at(DATE, "09:00"),
 				lastCall: at(DATE, "11:30"),
-				final: at(DATE, "13:00"),
+				close: at(DATE, "13:00"),
 			}),
 		});
 		expect(p.run).toBeNull();

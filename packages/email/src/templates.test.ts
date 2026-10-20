@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { escapeHtml, PARAM } from "./render";
 import {
+	canceledEmail,
 	creditsAddedEmail,
 	messageEmail,
 	type RsvpFacts,
+	reminderEmail,
 	resetPasswordEmail,
 	rsvpCallEmail,
-	rsvpConfirmedEmail,
-	rsvpFinalEmail,
 	rsvpLastCallEmail,
 	rsvpNudgeEmail,
 	verifyEmail,
@@ -28,39 +28,16 @@ const facts: RsvpFacts = {
 	inNames: ["Ana", "Marco"],
 	maybeNames: ["Pete"],
 	inCount: 7,
-	confirmAt: 12,
-	playAt: 8,
 	capacity: 42,
 	formatLabel: "4 v 4",
-	decideAt: "1:00 PM",
+	closeAt: "1:00 PM",
 };
 
 describe("the cycle emails", () => {
-	const call = rsvpCallEmail({ ...facts, today: false, alreadyOn: false });
-	const nudge = rsvpNudgeEmail({ ...facts, needed: 3 });
-	const confirmed = rsvpConfirmedEmail({
-		...facts,
-		inCount: 12,
-		permitUrl: `${site}/api/permits/abc/file`,
-	});
-	const lastCall = rsvpLastCallEmail({
-		...facts,
-		needed: 5,
-		wasConfirmed: false,
-	});
-	const on = rsvpFinalEmail({
-		...facts,
-		inCount: 9,
-		decision: "on",
-		permitUrl: null,
-	});
-	const off = rsvpFinalEmail({
-		...facts,
-		inCount: 6,
-		decision: "off",
-		permitUrl: null,
-	});
-	const all = [call, nudge, confirmed, lastCall, on, off];
+	const call = rsvpCallEmail({ ...facts, today: false });
+	const nudge = rsvpNudgeEmail(facts);
+	const lastCall = rsvpLastCallEmail(facts);
+	const all = [call, nudge, lastCall];
 
 	it("escape whatever an admin typed", () => {
 		expect(call.html).toContain("Shady Grove &lt;Middle&gt; School");
@@ -87,66 +64,92 @@ describe("the cycle emails", () => {
 		}
 	});
 
-	it("offer three answers before the last call and two after", () => {
+	it("offer three answers before the last call and two at it", () => {
 		for (const answer of ["in", "maybe", "out"]) {
 			expect(call.text).toContain(`%2Frsvp%2Fg-1%3Fa%3D${answer}`);
 			expect(nudge.text).toContain(`%2Frsvp%2Fg-1%3Fa%3D${answer}`);
 		}
 		// The last call exists to turn a maybe into an answer. Handing back the
-		// button that made the problem is how the verdict meets five maybes.
+		// button that made the problem is how answers close on five maybes.
 		expect(lastCall.text).not.toContain("%3Fa%3Dmaybe");
-		expect(confirmed.text).not.toContain("%3Fa%3Dmaybe");
-		// The verdict asks nothing. The question is closed.
-		for (const r of [on, off]) {
-			expect(r.text).not.toContain("%3Fa%3D");
-		}
 	});
 
-	it("keep the permit link token-free: gym staff see it", () => {
-		expect(confirmed.text).toContain(`${site}/api/permits/abc/file`);
-		expect(confirmed.text).not.toContain("/api/permits/abc/file?k=");
-	});
-
-	it("say where the count stands", () => {
+	it("say where the count stands, and never what it would take", () => {
 		expect(call.subject).toBe(
 			"Volleyball tomorrow, 7:30 – 10:00 PM. Are you in?",
 		);
-		expect(nudge.subject).toBe("Tonight: 7 in, 3 more needed. Are you coming?");
-		expect(confirmed.subject).toBe(
-			"Volleyball is on: Mon, Sep 14, 7:30 – 10:00 PM.",
-		);
+		expect(nudge.subject).toBe("Tonight: 7 in, 35 spots left. Are you coming?");
 		expect(lastCall.subject).toBe("Last call for tonight: 7 in so far.");
-		expect(on.subject).toBe("Volleyball is on tonight. 9 in.");
-		expect(off.subject).toBe("No volleyball tonight. 6 in, 8 needed.");
 		expect(call.text).toContain("Ana, Marco");
+		// Whoever is in plays. No email may suggest a number the night needs.
+		for (const r of all)
+			expect(r.text).not.toMatch(/needed|confirm|called off/i);
 	});
 
-	it("name the verdict time they were given, not one of their own", () => {
-		expect(lastCall.text).toContain("At 1:00 PM we make the final call");
-		expect(lastCall.text).toContain("Final call: 1:00 PM");
-		expect(confirmed.text).toContain("before 1:00 PM");
+	it("name the close time they were given, not one of their own", () => {
+		expect(call.text).toContain("Please answer by 1:00 PM tomorrow");
+		expect(nudge.text).toContain("either way by 1:00 PM");
+		expect(lastCall.text).toContain("Answers close at 1:00 PM");
+		expect(lastCall.text).toContain("Answers close: 1:00 PM");
 	});
 
 	it("says tonight when the gym was booked the same day", () => {
-		const today = rsvpCallEmail({ ...facts, today: true, alreadyOn: false });
+		const today = rsvpCallEmail({ ...facts, today: true });
 		expect(today.subject).toContain("tonight");
 		expect(today.text).toContain("Volleyball tonight. Are you in?");
+		// It may be past the close already: it names no deadline.
+		expect(today.text).not.toContain("1:00 PM");
+	});
+});
+
+describe("canceled", () => {
+	const off = canceledEmail({
+		dateLabel: facts.dateLabel,
+		timeLabel: facts.timeLabel,
+		location: facts.location,
+		siteUrl: site,
 	});
 
-	it("doubles as the confirmation when enough answered before we asked", () => {
-		const already = rsvpCallEmail({
-			...facts,
-			inCount: 13,
-			today: false,
-			alreadyOn: true,
-		});
-		expect(already.text).toContain("The night is on.");
+	it("says it is off without a headcount", () => {
+		expect(off.subject).toBe("Called off: no volleyball Mon, Sep 14.");
+		expect(off.text).not.toMatch(/\d+ in\b/);
 	});
 
-	it("tells a sponsor to pass a cancellation on", () => {
+	it("tells a sponsor to pass it on", () => {
 		expect(off.text).toContain("let them know before they head over");
-		// The maybes are named on a cancellation: they were waiting on this.
-		expect(off.text).toContain("Pete");
+	});
+
+	it("asks nothing, but signs the reader in", () => {
+		expect(off.text).not.toContain("%3Fa%3D");
+		expect(off.text).toContain(PARAM.key);
+		expect(off.text).toContain(PARAM.unsubscribeUrl);
+	});
+});
+
+describe("reminder", () => {
+	const input = {
+		gameId: "g-1",
+		dateLabel: facts.dateLabel,
+		timeLabel: facts.timeLabel,
+		location: facts.location,
+		formatLabel: facts.formatLabel,
+		notes: null,
+		siteUrl: site,
+	};
+
+	it("keeps the permit link token-free: gym staff see it", () => {
+		const r = reminderEmail({
+			...input,
+			permitUrl: `${site}/api/permits/abc/file`,
+		});
+		expect(r.text).toContain(`${site}/api/permits/abc/file`);
+		expect(r.text).not.toContain("/api/permits/abc/file?k=");
+	});
+
+	it("leaves the permit out when there is none", () => {
+		expect(reminderEmail({ ...input, permitUrl: null }).text).not.toContain(
+			"Permit",
+		);
 	});
 });
 

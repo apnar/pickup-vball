@@ -58,7 +58,7 @@ export default {
 	/**
 	 * Cron Triggers (wrangler.jsonc `triggers.crons`). Every minute: send
 	 * what is due from the text outbox. Every half hour: the RSVP cycle --
-	 * the five emails and the 1 PM verdict, all of it described on
+	 * three emails and answers closing at 1 PM, all of it described on
 	 * /admin/cycle -- the game-day reminders, and tidying suspensions that
 	 * have run out. Test locally with
 	 * `curl "http://localhost:3001/cdn-cgi/local/scheduled?cron=0+*+*+*+*"`

@@ -215,19 +215,19 @@ function AdminPeoplePage() {
 	});
 
 	// The next night whose cycle has actually started, and the last stage of it
-	// that resolved -- that is the email this person is missing.
+	// that resolved -- that is the email this person is missing. Once answers
+	// have closed there is nothing left worth resending: every stage asks.
 	const nextGame = (games.data?.upcoming ?? []).find((g) => g.callAt);
-	const lastStage = nextGame
-		? (
-				[
-					["final", nextGame.decidedAt],
-					["lastCall", nextGame.lastCallAt],
-					["confirmed", nextGame.confirmedAt],
-					["nudge", nextGame.nudgeAt],
-					["call", nextGame.callAt],
-				] as const
-			).find(([, at]) => at)?.[0]
-		: undefined;
+	const lastStage =
+		nextGame && !nextGame.decidedAt
+			? (
+					[
+						["lastCall", nextGame.lastCallAt],
+						["nudge", nextGame.nudgeAt],
+						["call", nextGame.callAt],
+					] as const
+				).find(([, at]) => at)?.[0]
+			: undefined;
 	const busy = suspend.isPending || unsuspend.isPending;
 
 	// Deactivated rows are history, not roster, so they sit at the bottom.

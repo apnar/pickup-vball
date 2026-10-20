@@ -19,7 +19,7 @@ describe("choiceFor", () => {
 	});
 
 	it("will not turn a required topic off", () => {
-		expect(choiceFor("final", "off")).toBe("email");
+		expect(choiceFor("canceled", "off")).toBe("email");
 		expect(choiceFor("call", "off")).toBe("off");
 	});
 

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { PARAM } from "./render";
 import { createTexter, segmentsOf, toGsm } from "./sms";
 import {
+	canceledText,
 	creditsAddedText,
 	lowCreditText,
 	messageText,
@@ -10,8 +11,6 @@ import {
 	reminderText,
 	replyText,
 	rsvpCallText,
-	rsvpConfirmedText,
-	rsvpFinalText,
 	rsvpLastCallText,
 	rsvpNudgeText,
 	spotOpenText,
@@ -29,11 +28,11 @@ const facts = {
 	inNames: [],
 	maybeNames: [],
 	inCount: 11,
-	confirmAt: 12,
-	playAt: 8,
 	capacity: 42,
 	formatLabel: "6 v 6",
-	decideAt: "1:00 PM",
+	closeAt: "1:00 PM",
+	permitUrl:
+		"https://vball.moco-pickup.com/api/permits/3f2b8c1e-9d4a-4e6b-8a7c-1d2e3f4a5b6c/file",
 };
 
 /** As it leaves: the key filled in at its full length, then made GSM. */
@@ -42,13 +41,11 @@ function asSent(text: string): string {
 }
 
 const all: [string, string][] = [
-	["call", rsvpCallText({ ...facts, today: false, alreadyOn: false })],
-	["call already on", rsvpCallText({ ...facts, today: true, alreadyOn: true })],
-	["nudge", rsvpNudgeText({ ...facts, needed: 1 })],
-	["confirmed", rsvpConfirmedText(facts)],
-	["last call", rsvpLastCallText({ ...facts, needed: 1, wasConfirmed: false })],
-	["final on", rsvpFinalText({ ...facts, decision: "on", permitUrl: null })],
-	["final off", rsvpFinalText({ ...facts, decision: "off", permitUrl: null })],
+	["call", rsvpCallText({ ...facts, today: false })],
+	["call tonight", rsvpCallText({ ...facts, today: true })],
+	["nudge", rsvpNudgeText(facts)],
+	["last call", rsvpLastCallText(facts)],
+	["canceled", canceledText(facts)],
 	["waitlist", waitlistInText(facts)],
 	[
 		"waitlist guest",
@@ -78,7 +75,7 @@ const all: [string, string][] = [
 	["reply maybe", replyText({ kind: "maybe", night: facts })],
 	[
 		"reply closed",
-		replyText({ kind: "closed", night: facts, decideAt: "1:00 PM" }),
+		replyText({ kind: "closed", night: facts, closeAt: "1:00 PM" }),
 	],
 	["reply on break", replyText({ kind: "on-break", siteUrl: facts.siteUrl })],
 	["reply none", replyText({ kind: "none", siteUrl: facts.siteUrl })],
@@ -93,11 +90,11 @@ describe("text templates", () => {
 	});
 
 	it("opens with who it is from, in plain quotes", () => {
-		expect(asSent(rsvpConfirmedText(facts))).toMatch(/^Viroj's Pickup: /);
+		expect(asSent(rsvpNudgeText(facts))).toMatch(/^Viroj's Pickup: /);
 	});
 
 	it("links to the night with the reader's key still a placeholder", () => {
-		const text = rsvpCallText({ ...facts, today: false, alreadyOn: false });
+		const text = rsvpCallText({ ...facts, today: false });
 		expect(text).toContain(
 			`https://vball.moco-pickup.com/api/auth/link?k=${PARAM.key}&g=${facts.gameId}`,
 		);

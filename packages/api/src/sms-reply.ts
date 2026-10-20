@@ -144,7 +144,7 @@ async function decide(
 			replyText({
 				kind: "closed",
 				night: nightOf(target),
-				decideAt: formatGameTime(STAGE.final.at ?? "13:00"),
+				closeAt: formatGameTime(STAGE.close.at),
 			}),
 			target.id,
 		);

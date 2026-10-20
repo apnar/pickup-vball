@@ -6,7 +6,6 @@ import { and, eq } from "drizzle-orm";
 import { canSee, scopeFor } from "./access";
 import type { Context } from "./context";
 import { findGame, type GameSummary } from "./games";
-import { confirmIfReady } from "./jobs/rsvp-cycle";
 import { nameKeyOf } from "./run";
 import { addRow, answerRow, promote } from "./waitlist";
 
@@ -71,7 +70,7 @@ export type Landed = "in" | "waitlist" | "other";
  * One person's own answer to one night, by any route -- a tap on the site
  * or a text. Checks they may (in their group, not called off, not on a
  * break for a yes), writes it through the waitlist rules, then lets the
- * line move and the night confirm.
+ * line move.
  */
 export async function recordAnswer(
 	db: Db,
@@ -124,10 +123,6 @@ export async function recordAnswer(
 		}
 	}
 
-	// The confirming yes takes effect immediately rather than at the next
-	// cron pass. Awaited rather than deferred: nothing plumbs an execution
-	// context to oRPC, and the cron would catch it anyway.
 	await promote(db, game);
-	await confirmIfReady(db, game.id);
 	return { game, landed };
 }

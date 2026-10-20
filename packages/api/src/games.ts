@@ -18,7 +18,7 @@ import {
 
 import type { Scope } from "./access";
 import type { Context } from "./context";
-import { CLOCK_STAGES } from "./cycle";
+import { STAGES } from "./cycle";
 import {
 	addDays,
 	FORMAT_LABEL,
@@ -48,7 +48,6 @@ function selectGames(db: Db) {
 				status: game.status,
 				callAt: game.callAt,
 				nudgeAt: game.nudgeAt,
-				confirmedAt: game.confirmedAt,
 				lastCallAt: game.lastCallAt,
 				decidedAt: game.decidedAt,
 				lastEmailAt: game.lastEmailAt,
@@ -99,11 +98,11 @@ export function decorateGame(row: GameRow) {
 		 */
 		cycle: {
 			startsAt: runInstant(row.date, row.startTime).toISOString(),
-			stages: CLOCK_STAGES.map((stage) => ({
+			stages: STAGES.map((stage) => ({
 				key: stage.key,
 				at: runInstant(
 					addDays(row.date, stage.dayOffset),
-					stage.at as string,
+					stage.at,
 				).toISOString(),
 				doneAt: (row[stage.column] as Date | null)?.toISOString() ?? null,
 			})),

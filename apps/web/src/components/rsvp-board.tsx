@@ -9,10 +9,10 @@ import { dateParts, GameFacts } from "@/components/game-facts";
 import { GuestPanel } from "@/components/guest-panel";
 import { ResponsePicker } from "@/components/response-picker";
 import {
+	CalledOff,
 	Countdown,
 	CountTiles,
 	RsvpMeter,
-	Verdict,
 } from "@/components/rsvp-status";
 import SectionKicker from "@/components/section-kicker";
 import { initials } from "@/components/user-menu";
@@ -106,7 +106,7 @@ export default function RsvpBoard() {
 
 	const { game, me, viewer, rsvps, myPlace, full } = headcount;
 	const away = viewer?.status === "suspended";
-	// Once the verdict is in, the sheet is a record rather than a question.
+	// Once answers close, the sheet is a record rather than a question.
 	const locked = game.status === "canceled" || Boolean(game.decidedAt);
 	const mine = me ? (rsvps.find((r) => r.id === me)?.response ?? null) : null;
 	const d = dateParts(game.date);
@@ -142,7 +142,7 @@ export default function RsvpBoard() {
 						</div>
 					</div>
 
-					<Verdict headcount={headcount} />
+					<CalledOff headcount={headcount} />
 					<RsvpMeter headcount={headcount} />
 
 					{away ? (

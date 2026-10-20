@@ -19,8 +19,7 @@ import { game } from "./game";
 export const NOTIFY_TOPICS = [
 	"call",
 	"nudge",
-	"confirmed",
-	"final",
+	"canceled",
 	"waitlist_in",
 	"reminder",
 	"spot_open",

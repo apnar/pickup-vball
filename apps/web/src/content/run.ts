@@ -55,8 +55,8 @@ export const conditions = [
  * House rules, in the order they matter. Viroj's own five, then the reverse
  * coed rule the spec asks every revco night to show. Numbered where they are
  * rendered, not here, so a rule can be added anywhere without renumbering.
- * The 1 PM in the second one is the RSVP cycle's verdict (packages/api/src/
- * cycle.ts); change both or neither.
+ * The 1 PM in the second one is when the RSVP cycle closes answers
+ * (packages/api/src/cycle.ts); change both or neither.
  */
 export const rules = [
 	{
@@ -65,7 +65,7 @@ export const rules = [
 	},
 	{
 		title: "Confirm by 1 PM",
-		body: "Answer the email the evening before, or on the day of the night by 1 PM. At 1 PM the night is decided and teams are made from whoever is in, so a spot you haven’t confirmed may go to someone else. If your plans change, change your answer.",
+		body: "Answer the email the evening before, or on the day of the night by 1 PM. At 1 PM answers close and teams are made from whoever is in, so a spot you haven’t confirmed may go to someone else. If your plans change, change your answer.",
 	},
 	{
 		title: "No call, no show",
@@ -92,10 +92,10 @@ export const rules = [
  * together, and tell the campaign registration if the substance changes.
  */
 export const TEXTS = {
-	consent: `Text me about nights I play from ${SITE_NAME}: the call, reminders, whether a night is on, and anything I turn on below. Frequency varies, usually a few texts a week. Msg & data rates may apply. Reply STOP to opt out, HELP for help.`,
+	consent: `Text me about nights I play from ${SITE_NAME}: the call, reminders, a night being called off, and anything I turn on below. Frequency varies, usually a few texts a week. Msg & data rates may apply. Reply STOP to opt out, HELP for help.`,
 	program: [
 		`${SITE_NAME} is an invite-only pickup volleyball group in ${SITE_AREA}. Members can choose to get some or all of the group's messages by text instead of, or as well as, email.`,
-		"What we text: the evening-before call for a night, reminders to answer while a night is short, whether a night is on or called off, a spot opening up for you off the waitlist, a game-day reminder, credit receipts and low-credit alerts, and group updates from the organisers. Each member chooses which of these come by text.",
+		"What we text: the evening-before call for a night, reminders to answer while a night has spots left, a night being called off by the organisers, a spot opening up for you off the waitlist, a game-day reminder, credit receipts and low-credit alerts, and group updates from the organisers. Each member chooses which of these come by text.",
 		"How you opt in: signed in to the site, a member enters their mobile number on their account page, ticks a box agreeing to texts, and types back the 6-digit code we text to that number. Nobody is texted without doing this, and admins cannot add a number for anyone.",
 		"Frequency varies with the schedule, usually a few texts a week. Message and data rates may apply.",
 		"Reply STOP at any time to stop all texts, and START to have them back. Reply HELP for help. Replying IN, OUT or MAYBE answers for the night we last texted you about.",

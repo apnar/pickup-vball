@@ -148,14 +148,23 @@ only: it sorts the permit dropdown when booking and never gates anything.
 
 ### The RSVP cycle
 
-`packages/api/src/cycle.ts` is the single source of truth for the schedule and
-the thresholds (`CONFIRM_AT` 12, `PLAY_AT` 8). The job reads it, `/admin/cycle`
-renders the same array as prose, so the documentation cannot drift. Keep that
-file free of drizzle and `cloudflare:workers` — the web app bundles it.
+`packages/api/src/cycle.ts` is the single source of truth for the schedule.
+The job reads it, `/admin/cycle` renders the same array as prose, so the
+documentation cannot drift. Keep that file free of drizzle and
+`cloudflare:workers` — the web app bundles it.
+
+**There is no headcount threshold, on purpose.** Unlike the basketball site,
+a night is never confirmed or called off by its count: whoever is in plays.
+The stages are the call, the reminder and the last call (the last two skip
+a full night), then `close` at 1 PM, which sends nothing and stamps
+`decided_at` -- the stamp the board, the text replies and `removeGuest` read
+as "answers closed". `status = 'canceled'` only comes from an admin's
+`mail.cancel`, which emails everyone asked about the night. Do not bring
+back an "it's on" or "called off for numbers" message.
 
 - `jobs/plan.ts` is a **pure** `planStage()`: given stamps and a clock it says
   which stage to run. Its rules (opening call never skipped, one stage per pass
-  and it is the latest due, 90-minute cooldown that the verdict ignores) are
+  and it is the latest due, 90-minute cooldown that the silent close ignores) are
   the interesting part and are unit-tested without a database.
 - `jobs/rsvp-cycle.ts` executes: read → decide → claim → send, in that order,
   so a stage that turns out to have nothing to say is never recorded as an
@@ -165,9 +174,6 @@ file free of drizzle and `cloudflare:workers` — the web app bundles it.
   job retries them every half hour. `email_send` is the record of real sends.
 - `jobs/stage-render.ts` is shared by the job and the admin preview, so a
   preview cannot show an email different from the one that goes out.
-- The twelfth yes fires stage 03 inline from the rsvp mutations *and* from the
-  cron. The shared claim makes double-sending impossible; nothing plumbs an
-  `ExecutionContext` to oRPC, so it is awaited rather than deferred.
 - `runInstant(date, time)` in `run.ts` converts the gym's wall clock to a UTC
   instant with a two-pass offset fix. That second pass is what survives the
   week after a DST switch, when the evening-before call and the game itself sit

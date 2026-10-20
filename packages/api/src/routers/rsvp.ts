@@ -13,10 +13,8 @@ import { canSee, scopeFor } from "../access";
 import { recordAnswer, requireGame, requireHere, requireSpot } from "../answer";
 import { guestSuggestions, splitAudience } from "../audience";
 import type { Context } from "../context";
-import { CONFIRM_AT, PLAY_AT } from "../cycle";
 import { findGame, findNextGame, type GameSummary } from "../games";
 import { protectedProcedure } from "../index";
-import { confirmIfReady } from "../jobs/rsvp-cycle";
 import { listAskedFor } from "../mail";
 import { isAdmin, nameKeyOf } from "../run";
 import { addRow, answerRow, promote, waitlistOrder } from "../waitlist";
@@ -100,8 +98,6 @@ async function listGame(
 	return {
 		game,
 		capacity: game.capacity,
-		confirmAt: CONFIRM_AT,
-		playAt: PLAY_AT,
 		/** The caller's own row, so the board can mark it "you". */
 		me: meRow?.id ?? null,
 		/** Where the caller stands in line, or null when not waiting. */
@@ -299,7 +295,6 @@ export const rsvpRouter = {
 			}
 
 			await promote(context.db, game);
-			await confirmIfReady(context.db, game.id);
 			return reread(context, game.id, game);
 		}),
 
@@ -355,7 +350,6 @@ export const rsvpRouter = {
 			);
 
 			await promote(context.db, game);
-			await confirmIfReady(context.db, game.id);
 			return reread(context, game.id, game);
 		}),
 
@@ -373,7 +367,7 @@ export const rsvpRouter = {
 			if (game.decidedAt) {
 				throw new ORPCError("BAD_REQUEST", {
 					message:
-						"This night has been decided, so the sheet can no longer change.",
+						"Answers for this night are closed, so the sheet can no longer change.",
 				});
 			}
 			const me = context.session.user;
@@ -407,9 +401,7 @@ export const rsvpRouter = {
 
 			await context.db.delete(rsvp).where(eq(rsvp.id, row.id));
 
-			// A guest who was in leaves a spot for the front of the line. No
-			// confirmIfReady past that: promoting only refills what was freed,
-			// and stage 03 fires once and never un-fires.
+			// A guest who was in leaves a spot for the front of the line.
 			await promote(context.db, game);
 			return reread(context, game.id, game);
 		}),

@@ -52,13 +52,13 @@ describe("pickNight", () => {
 		});
 	});
 
-	it("passes over a decided night to an open one", () => {
+	it("passes over a closed night to an open one", () => {
 		expect(
 			pickNight([night("a", { decidedAt: now }), night("b")], now),
 		).toEqual({ kind: "open", id: "b" });
 	});
 
-	it("says closed when the only live night is decided", () => {
+	it("says closed when the only live night has closed", () => {
 		expect(pickNight([night("a", { decidedAt: now })], now)).toEqual({
 			kind: "closed",
 			id: "a",

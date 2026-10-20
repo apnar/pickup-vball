@@ -1,25 +1,18 @@
 /**
- * The RSVP cycle: what a night asks the group, when, and what it does with the
- * answers. This is the only place those facts exist. The job runs off it, the
- * admin write-up page renders it, and the numbers below are interpolated into
+ * The RSVP cycle: what a night asks the group, when, and when the asking
+ * stops. This is the only place those facts exist. The job runs off it, the
+ * admin write-up page renders it, and the times below are interpolated into
  * both -- so the page cannot describe a schedule the code is not keeping.
+ *
+ * There is no headcount anywhere in it. A night is never called off for
+ * being short: whoever is in plays. Only an admin cancels a night, by hand,
+ * for a reason a count cannot know (the gym is shut, the roads are ice).
  *
  * Pure by design: nothing here may import drizzle, the Worker env, or anything
  * that reaches them, because the web app pulls this into the client bundle.
  */
 
 import type { EmailKind } from "@pickup-vball/db/schema/email";
-
-import { DEFAULT_CAPACITY } from "./run";
-
-/**
- * Twelve in confirms a night: two full sides of six. The twelfth yes sends
- * "it's on" early and stops the reminders.
- */
-export const CONFIRM_AT = 12;
-
-/** Fewer than eight at the verdict and the night is called off. */
-export const PLAY_AT = 8;
 
 /**
  * No two cycle emails about the same night land closer than this. A night
@@ -30,9 +23,9 @@ export const PLAY_AT = 8;
 export const STAGE_COOLDOWN_MINUTES = 90;
 
 /**
- * The game-day reminder goes this long before a night that is on, to the
- * people who are in. Not a stage: it asks nothing, and the answers are
- * closed by the time it goes.
+ * The game-day reminder goes this long before a night, to the people who
+ * are in. Not a stage: it asks nothing, and the answers are closed by the
+ * time it goes.
  */
 export const REMINDER_LEAD_HOURS = 3;
 
@@ -42,26 +35,25 @@ export const REMINDER_LEAD_HOURS = 3;
  */
 export const SPOT_OPEN_COOLDOWN_MINUTES = 60;
 
-export type StageKey = "call" | "nudge" | "confirmed" | "lastCall" | "final";
+export type StageKey = "call" | "nudge" | "lastCall" | "close";
+
+/** The stages that send something. The close only stamps. */
+export type EmailStageKey = Exclude<StageKey, "close">;
 
 /** The `game` column that records a stage as resolved. */
-export type StageColumn =
-	| "callAt"
-	| "nudgeAt"
-	| "confirmedAt"
-	| "lastCallAt"
-	| "decidedAt";
+export type StageColumn = "callAt" | "nudgeAt" | "lastCallAt" | "decidedAt";
 
 export type Stage = {
 	key: StageKey;
-	/** "01".."05", for the write-up. */
+	/** "01".."04", for the write-up. */
 	num: string;
 	column: StageColumn;
-	kind: EmailKind;
+	/** What a send of it is logged as. Null for the close, which sends nothing. */
+	kind: EmailKind | null;
 	/** Days from the game's date. -1 is the evening before. */
 	dayOffset: number;
-	/** HH:MM on the gym's clock, or null when a count fires it, not the clock. */
-	at: string | null;
+	/** HH:MM on the gym's clock. */
+	at: string;
 	/* The write-up, rendered by /admin/cycle. Nobody types these twice. */
 	when: string;
 	who: string;
@@ -71,11 +63,11 @@ export type Stage = {
 };
 
 /*
- * The verdict is at 1 PM because the house rules say so: confirm by 1 PM on
+ * Answers close at 1 PM because the house rules say so: confirm by 1 PM on
  * the day, and teams are made from whoever is in. The reminder and the last
  * call sit far enough ahead of it to keep the ninety-minute spacing. A night
  * that starts earlier still gets every stage that falls before its start;
- * past the start, the verdict is recorded and nobody is emailed (see R0 in
+ * past the start, the close is recorded and nothing else goes out (see R0 in
  * jobs/plan.ts).
  */
 export const STAGES: readonly Stage[] = [
@@ -102,26 +94,12 @@ export const STAGES: readonly Stage[] = [
 		when: "9:00 AM on the day",
 		who: "Only the people who have not answered",
 		title: "Reminder",
-		says: `Sent only if fewer than ${CONFIRM_AT} are in. Lists everyone who has already said yes. Anyone who has answered is left alone.`,
-		aside:
-			"One reminder, to the people who have not replied, and only when it is needed.",
-	},
-	{
-		key: "confirmed",
-		num: "03",
-		column: "confirmedAt",
-		kind: "rsvp_confirmed",
-		dayOffset: 0,
-		at: null,
-		when: `the moment the ${CONFIRM_AT}th yes comes in`,
-		who: "Everyone who said in or maybe",
-		title: "It's on",
-		says: `The ${CONFIRM_AT}th yes confirms the night, whatever time it arrives. Sent once and never taken back by the job.`,
-		aside: `${CONFIRM_AT} is two full sides of six.`,
+		says: "Lists everyone who has already said yes. Anyone who has answered is left alone. Not sent once every spot is taken.",
+		aside: "One reminder, to the people who have not replied.",
 	},
 	{
 		key: "lastCall",
-		num: "04",
+		num: "03",
 		column: "lastCallAt",
 		kind: "rsvp_last_call",
 		dayOffset: 0,
@@ -129,50 +107,36 @@ export const STAGES: readonly Stage[] = [
 		when: "11:30 AM on the day",
 		who: "The maybes, and anyone who still has not answered",
 		title: "Last call",
-		says: `Sent only if the night is still short of ${CONFIRM_AT}. The last chance for a maybe to become a yes.`,
+		says: "The last chance for a maybe to become a yes before answers close. Not sent once every spot is taken.",
 		aside:
-			"An hour and a half before the verdict, so there is still time to change plans.",
+			"An hour and a half before answers close, so there is still time to change plans.",
 	},
 	{
-		key: "final",
-		num: "05",
+		key: "close",
+		num: "04",
 		column: "decidedAt",
-		kind: "rsvp_final",
+		kind: null,
 		dayOffset: 0,
 		at: "13:00",
 		when: "1:00 PM on the day",
-		who: "Everyone who answered. If it is off, everyone else too.",
-		title: "The verdict",
-		says: `${PLAY_AT} or more in and the night is on. Fewer and it is off. If it was already on and still is, nothing is sent: the answer has not changed.`,
-		aside:
-			"The house rules' 1 PM deadline: teams are made from whoever is in, and everyone has the afternoon to make other plans.",
+		who: "Nobody. Nothing is sent.",
+		title: "Answers close",
+		says: "The sheet freezes and teams are made from whoever is in. However many that is, the night goes ahead.",
+		aside: "The house rules' 1 PM deadline.",
 	},
 ];
 
-/** The stages a clock fires. Stage 03 is fired by a count, so it is not here. */
-export const CLOCK_STAGES: readonly Stage[] = STAGES.filter(
-	(s) => s.at !== null,
+export type EmailStage = Stage & { key: EmailStageKey; kind: EmailKind };
+
+/** The stages that send something, for the preview and resend buttons. */
+export const EMAIL_STAGES = STAGES.filter(
+	(s): s is EmailStage => s.kind !== null,
 );
+
+export const EMAIL_STAGE = Object.fromEntries(
+	EMAIL_STAGES.map((s) => [s.key, s]),
+) as Record<EmailStageKey, EmailStage>;
 
 export const STAGE = Object.fromEntries(
 	STAGES.map((s) => [s.key, s]),
 ) as Record<StageKey, Stage>;
-
-/** The numbers, for the write-up. Same constants the job counts with. */
-export const CYCLE_NUMBERS = [
-	{
-		value: CONFIRM_AT,
-		label: "Confirm",
-		body: "Two full sides of six. The night is confirmed early and the reminders stop.",
-	},
-	{
-		value: PLAY_AT,
-		label: "Minimum",
-		body: "Below this at the verdict, the night is called off.",
-	},
-	{
-		value: DEFAULT_CAPACITY,
-		label: "Spots",
-		body: "The usual number. Each night sets its own when it is booked, and once it is full a player's yes is refused.",
-	},
-] as const;

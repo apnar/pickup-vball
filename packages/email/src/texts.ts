@@ -10,14 +10,12 @@
 
 import { PARAM } from "./render";
 import { SITE_NAME } from "./sender";
+import type { CanceledInput } from "./templates/canceled";
 import type { CreditsAddedInput } from "./templates/credits-added";
 import type { LowCreditInput } from "./templates/low-credit";
 import type { ReminderInput } from "./templates/reminder";
-import type { RsvpFacts } from "./templates/rsvp";
+import { type RsvpFacts, spotsLeft } from "./templates/rsvp";
 import type { RsvpCallInput } from "./templates/rsvp-call";
-import type { RsvpFinalInput } from "./templates/rsvp-final";
-import type { RsvpLastCallInput } from "./templates/rsvp-last-call";
-import type { RsvpNudgeInput } from "./templates/rsvp-nudge";
 import type { SpotOpenInput } from "./templates/spot-open";
 import type { WaitlistInInput } from "./templates/waitlist-in";
 
@@ -59,56 +57,34 @@ export function rsvpCallText(input: RsvpCallInput): string {
 	const day = input.today ? "tonight" : "tomorrow";
 	return line(
 		TEXT_BRAND,
-		input.alreadyOn
-			? `Volleyball is on ${day} (${when(input)}) at ${placeOf(input.location)}. Reply IN or OUT so the count is right.`
-			: `Volleyball ${day} (${when(input)}) at ${placeOf(input.location)}. Are you in? Reply IN, OUT or MAYBE.`,
+		`Volleyball ${day} (${when(input)}) at ${placeOf(input.location)}. Are you in? Reply IN, OUT or MAYBE.`,
 		textLinkToNight(input.siteUrl, input.gameId),
 	);
 }
 
 /** Stage 02. */
-export function rsvpNudgeText(input: RsvpNudgeInput): string {
+export function rsvpNudgeText(input: RsvpFacts): string {
 	return line(
 		TEXT_BRAND,
-		`Tonight, ${input.timeLabel} at ${placeOf(input.location)}: ${input.inCount} in, ${input.needed} more needed. Coming? Reply IN, OUT or MAYBE.`,
+		`Tonight, ${input.timeLabel} at ${placeOf(input.location)}: ${input.inCount} in, ${spotsLeft(input)} left. Coming? Reply IN, OUT or MAYBE.`,
 		textLinkToNight(input.siteUrl, input.gameId),
 	);
 }
 
 /** Stage 03. */
-export function rsvpConfirmedText(input: RsvpFacts): string {
+export function rsvpLastCallText(input: RsvpFacts): string {
 	return line(
 		TEXT_BRAND,
-		`The night is on: ${when(input)} at ${placeOf(input.location)}, ${input.inCount} in. Said maybe? Reply IN or OUT by ${input.decideAt}.`,
+		`Last call for tonight: ${input.inCount} in, ${spotsLeft(input)} left. Answers close at ${input.closeAt}. Reply IN or OUT.`,
 		textLinkToNight(input.siteUrl, input.gameId),
 	);
 }
 
-/** Stage 04. */
-export function rsvpLastCallText(input: RsvpLastCallInput): string {
+/** An admin called a night off. */
+export function canceledText(input: CanceledInput): string {
 	return line(
 		TEXT_BRAND,
-		`Last call for tonight: ${input.inCount} in.`,
-		input.wasConfirmed
-			? `We need ${input.playAt} to play.`
-			: `${input.needed} more would confirm it.`,
-		`Final call at ${input.decideAt}. Reply IN or OUT.`,
-		textLinkToNight(input.siteUrl, input.gameId),
-	);
-}
-
-/** Stage 05. */
-export function rsvpFinalText(input: RsvpFinalInput): string {
-	if (input.decision === "on") {
-		return line(
-			TEXT_BRAND,
-			`On for tonight, ${input.timeLabel} at ${placeOf(input.location)}. ${input.inCount} in. See you there.`,
-			textLinkToNight(input.siteUrl, input.gameId),
-		);
-	}
-	return line(
-		TEXT_BRAND,
-		`No volleyball tonight: ${input.inCount} in, ${input.playAt} needed. Signed up a guest? Please let them know.`,
+		`Called off: no volleyball ${when(input)} at ${placeOf(input.location)}. Signed up a guest? Please let them know.`,
 		textLink(input.siteUrl, "/schedule"),
 	);
 }
@@ -138,7 +114,7 @@ export function creditsAddedText(input: CreditsAddedInput): string {
 	);
 }
 
-/** The game-day reminder, a few hours before a night that is on. */
+/** The game-day reminder, a few hours before a night. */
 export function reminderText(input: ReminderInput): string {
 	return line(
 		TEXT_BRAND,
@@ -199,7 +175,7 @@ export function replyText(
 	input:
 		| { kind: "in" | "out" | "maybe"; night: ReplyNight }
 		| { kind: "waitlist"; night: ReplyNight; position: number }
-		| { kind: "closed"; night: ReplyNight; decideAt: string }
+		| { kind: "closed"; night: ReplyNight; closeAt: string }
 		| { kind: "on-break" | "none" | "unknown"; siteUrl: string },
 ): string {
 	switch (input.kind) {
@@ -230,7 +206,7 @@ export function replyText(
 		case "closed":
 			return line(
 				TEXT_BRAND,
-				`Answers for ${when(input.night)} closed at the ${input.decideAt} call, so nothing changed. Need to drop out? Tell an admin.`,
+				`Answers for ${when(input.night)} closed at ${input.closeAt}, so nothing changed. Need to drop out? Tell an admin.`,
 			);
 		case "on-break":
 			return line(

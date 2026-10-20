@@ -55,7 +55,7 @@ const icon = {
  * the car wants the address more than anything else on the screen.
  */
 export function GameFacts({ game }: { game: Game }) {
-	const closes = game.cycle.stages.find((s) => s.key === "final")?.at ?? null;
+	const closes = game.cycle.stages.find((s) => s.key === "close")?.at ?? null;
 	const open = game.status !== "canceled" && !game.decidedAt;
 	return (
 		<div className="flex flex-col rounded-card bg-surface">

@@ -5,7 +5,9 @@ import {
 	layout,
 	listFooter,
 	listFooterText,
+	muted,
 	para,
+	urlLink,
 } from "../render";
 import type { Rendered } from "../telnyx";
 
@@ -16,12 +18,14 @@ export type ReminderInput = {
 	location: string;
 	formatLabel: string;
 	notes: string | null;
+	/** Token-free: it is for showing gym staff. */
+	permitUrl: string | null;
 	siteUrl: string;
 };
 
 /**
- * A few hours before a night that is on, to the people who are in. The
- * answers are closed by then, so there is nothing to tap but the night.
+ * A few hours before a night, to the people who are in. The answers are
+ * closed by then, so there is nothing to tap but the night.
  */
 export function reminderEmail(input: ReminderInput): Rendered {
 	const subject = `See you tonight at ${input.timeLabel}`;
@@ -31,7 +35,7 @@ export function reminderEmail(input: ReminderInput): Rendered {
 		{ label: "Where", value: input.location },
 		{ label: "Format", value: input.formatLabel },
 	];
-	const lead = "The night is on and you're in. Bring water and court shoes.";
+	const lead = "You're in for tonight. Bring water and court shoes.";
 
 	const html = layout({
 		title: subject,
@@ -41,6 +45,11 @@ export function reminderEmail(input: ReminderInput): Rendered {
 			para(lead),
 			factsTable(facts),
 			input.notes ? para(input.notes) : "",
+			input.permitUrl
+				? muted(
+						`If gym staff ask to see the permit, it is here: ${urlLink(input.permitUrl)}`,
+					)
+				: "",
 			button("See the night", link),
 		]
 			.filter(Boolean)
@@ -52,6 +61,7 @@ export function reminderEmail(input: ReminderInput): Rendered {
 		"",
 		...facts.map((f) => `${f.label}: ${f.value}`),
 		...(input.notes ? ["", input.notes] : []),
+		...(input.permitUrl ? ["", `Permit: ${input.permitUrl}`] : []),
 		"",
 		`See the night: ${link}`,
 		"",

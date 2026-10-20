@@ -8,10 +8,6 @@ import type { Rendered } from "@pickup-vball/email";
 import {
 	rsvpCallEmail,
 	rsvpCallText,
-	rsvpConfirmedEmail,
-	rsvpConfirmedText,
-	rsvpFinalEmail,
-	rsvpFinalText,
 	rsvpLastCallEmail,
 	rsvpLastCallText,
 	rsvpNudgeEmail,
@@ -19,7 +15,7 @@ import {
 } from "@pickup-vball/email";
 
 import { type Split, union } from "../audience";
-import { CONFIRM_AT, PLAY_AT, type StageKey } from "../cycle";
+import type { EmailStageKey } from "../cycle";
 import type { GameSummary } from "../games";
 import { rsvpFacts } from "../mail";
 import { todayInRunTimezone } from "../run";
@@ -33,25 +29,17 @@ export type StageRender = {
 };
 
 export function renderStage(input: {
-	stage: StageKey;
+	stage: EmailStageKey;
 	game: GameSummary;
 	split: Split;
-	permitUrl: string | null;
 	now: Date;
-	/** Preview or override a verdict rather than deriving it from the count. */
-	force?: "on" | "off";
 }): StageRender {
 	const { stage, game, split, now } = input;
 	const facts = rsvpFacts(game, split);
-	const needed = Math.max(0, CONFIRM_AT - split.yes);
 
 	switch (stage) {
 		case "call": {
-			const call = {
-				...facts,
-				today: game.date === todayInRunTimezone(now),
-				alreadyOn: split.yes >= CONFIRM_AT,
-			};
+			const call = { ...facts, today: game.date === todayInRunTimezone(now) };
 			return {
 				rendered: rsvpCallEmail(call),
 				text: rsvpCallText(call),
@@ -60,54 +48,15 @@ export function renderStage(input: {
 		}
 		case "nudge":
 			return {
-				rendered: rsvpNudgeEmail({ ...facts, needed }),
-				text: rsvpNudgeText({ ...facts, needed }),
+				rendered: rsvpNudgeEmail(facts),
+				text: rsvpNudgeText(facts),
 				audience: split.silentIds,
 			};
-		case "confirmed":
+		case "lastCall":
 			return {
-				rendered: rsvpConfirmedEmail({
-					...facts,
-					permitUrl: input.permitUrl,
-				}),
-				text: rsvpConfirmedText(facts),
-				audience: union(split.inIds, split.maybeIds),
-			};
-		case "lastCall": {
-			const lastCall = {
-				...facts,
-				needed,
-				wasConfirmed: game.status === "confirmed",
-			};
-			return {
-				rendered: rsvpLastCallEmail(lastCall),
-				text: rsvpLastCallText(lastCall),
+				rendered: rsvpLastCallEmail(facts),
+				text: rsvpLastCallText(facts),
 				audience: union(split.silentIds, split.maybeIds),
 			};
-		}
-		default: {
-			const on = input.force ? input.force === "on" : split.yes >= PLAY_AT;
-			const final = {
-				...facts,
-				decision: on ? ("on" as const) : ("off" as const),
-				permitUrl: input.permitUrl,
-			};
-			return {
-				rendered: rsvpFinalEmail(final),
-				text: rsvpFinalText(final),
-				// A cancellation goes wider than anything else in the cycle:
-				// someone who missed every email is the one most likely to drive
-				// to a locked gym out of habit, and a guest has no inbox at all.
-				audience: on
-					? union(split.inIds, split.maybeIds)
-					: union(
-							split.inIds,
-							split.maybeIds,
-							split.waitlistIds,
-							split.silentIds,
-							split.sponsorIds,
-						),
-			};
-		}
 	}
 }

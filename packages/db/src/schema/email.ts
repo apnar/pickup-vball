@@ -5,30 +5,33 @@ import { user } from "./auth";
 import { game } from "./game";
 
 export const EMAIL_KINDS = [
-	/** The five stages of the RSVP cycle, in the order they can fire. */
+	/** The stages of the RSVP cycle that send, in the order they fire. */
 	"rsvp_call",
 	"rsvp_nudge",
-	"rsvp_confirmed",
 	"rsvp_last_call",
-	"rsvp_final",
+	/** An admin called a night off by hand. */
+	"canceled",
 	/** Anything an admin types on /admin/email. */
 	"message",
 	/** A spot opened on a full night and the next on the waitlist got it. */
 	"waitlist_in",
 	/** One player's receipt when an admin adds credits they paid for. */
 	"credits_added",
-	/** A few hours before a night that is on, to the people who are in. */
+	/** A few hours before a night, to the people who are in. */
 	"reminder",
 	/** A player's balance fell to the last credit when a night was closed. */
 	"low_credit",
 	/** A full night with nobody waiting has a spot again. */
 	"spot_open",
 	/**
-	 * Legacy. Nothing writes it any more -- the RSVP cycle replaced the
-	 * announce-on-booking email -- but rows from before it may still carry
-	 * it and the admin log renders them, so the union has to admit it.
+	 * Legacy. Nothing writes these any more -- the RSVP cycle replaced the
+	 * announce-on-booking email, and a night stopped being confirmed or
+	 * called off by its count -- but rows from before may still carry them
+	 * and the admin log renders them, so the union has to admit them.
 	 */
 	"announcement",
+	"rsvp_confirmed",
+	"rsvp_final",
 ] as const;
 export type EmailKind = (typeof EMAIL_KINDS)[number];
 

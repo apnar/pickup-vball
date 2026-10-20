@@ -9,17 +9,13 @@ import {
 	spotOpenText,
 } from "@pickup-vball/email";
 import { siteUrl } from "@pickup-vball/email/worker";
-import { and, eq, isNull, lt, or } from "drizzle-orm";
+import { and, eq, isNull, lt, ne, or } from "drizzle-orm";
 
 import { union } from "../audience";
 import type { Context } from "../context";
-import {
-	REMINDER_LEAD_HOURS,
-	SPOT_OPEN_COOLDOWN_MINUTES,
-	STAGE,
-} from "../cycle";
+import { REMINDER_LEAD_HOURS, SPOT_OPEN_COOLDOWN_MINUTES } from "../cycle";
 import { findGame, type GameSummary } from "../games";
-import { readSplit, sendToList } from "../mail";
+import { permitUrl, readSplit, sendToList } from "../mail";
 import { runInstant, todayInRunTimezone } from "../run";
 
 type Db = Context["db"];
@@ -33,10 +29,9 @@ type Db = Context["db"];
 export type ReminderOutcome = { gameId: string; sent: number; texted: number };
 
 /**
- * The game-day reminder, for tonight's nights that are on. Run with the
- * cycle every half hour. Claimed with a conditional stamp like a stage, so
- * two runs cannot both send it; a night that is on before its verdict (a
- * daytime start) counts once twelve are in.
+ * The game-day reminder, for tonight's nights that were not called off. Run
+ * with the cycle every half hour. Claimed with a conditional stamp like a
+ * stage, so two runs cannot both send it.
  */
 export async function sendReminders(
 	db: Db,
@@ -44,30 +39,22 @@ export async function sendReminders(
 ): Promise<ReminderOutcome[]> {
 	const today = todayInRunTimezone(now);
 	const rows = await db
-		.select({
-			id: game.id,
-			date: game.date,
-			startTime: game.startTime,
-			decidedAt: game.decidedAt,
-		})
+		.select({ id: game.id, date: game.date, startTime: game.startTime })
 		.from(game)
 		.where(
 			and(
 				eq(game.date, today),
-				eq(game.status, "confirmed"),
+				ne(game.status, "canceled"),
 				isNull(game.reminderAt),
 			),
 		)
 		.all();
 
-	const verdict = runInstant(today, STAGE.final.at ?? "13:00").getTime();
 	const out: ReminderOutcome[] = [];
 	for (const row of rows) {
 		const starts = runInstant(row.date, row.startTime).getTime();
 		const due = starts - REMINDER_LEAD_HOURS * 60 * 60_000;
 		if (now.getTime() < due || now.getTime() >= starts) continue;
-		// Confirmed early, before a verdict that could still call it off.
-		if (!row.decidedAt && starts > verdict) continue;
 		const claimed = await db
 			.update(game)
 			.set({ reminderAt: now })
@@ -85,6 +72,7 @@ export async function sendReminders(
 			location: summary.location,
 			formatLabel: summary.kindLabel,
 			notes: summary.notes,
+			permitUrl: permitUrl(summary),
 			siteUrl: siteUrl(),
 		};
 		const result = await sendToList(db, {
