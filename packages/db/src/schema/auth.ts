@@ -25,7 +25,7 @@ export type PersonSource = (typeof PERSON_SOURCES)[number];
 export const PERSON_STATUSES = ["active", "suspended", "deactivated"] as const;
 export type PersonStatus = (typeof PERSON_STATUSES)[number];
 
-/** Who moved somebody off active. `mail` is Brevo telling us through the webhook. */
+/** Who moved somebody off active. `mail` is the mail provider telling us through the webhook. */
 export const STATUS_ACTORS = ["self", "admin", "mail"] as const;
 export type StatusActor = (typeof STATUS_ACTORS)[number];
 
@@ -79,10 +79,36 @@ export const user = sqliteTable(
 		 * nothing has to run for somebody to come back.
 		 */
 		suspendedUntil: integer("suspended_until", { mode: "timestamp_ms" }),
-		/** Their own words, usually an injury. Ours when Brevo told us. */
+		/** Their own words, usually an injury. Ours when the mail provider told us. */
 		statusReason: text("status_reason"),
 		statusChangedAt: integer("status_changed_at", { mode: "timestamp_ms" }),
 		statusChangedBy: text("status_changed_by", { enum: STATUS_ACTORS }),
+
+		/**
+		 * Their mobile number, E.164 (`+1XXXXXXXXXX`), and only ever one they
+		 * proved is theirs by typing back the code we texted it: a number
+		 * still being checked lives in `phone_check`. Unique, so one phone's
+		 * replies always mean one person.
+		 */
+		phone: text("phone"),
+		/**
+		 * When they typed the code back, which is also when they ticked the
+		 * box agreeing to texts -- the consent record a carrier asks for.
+		 */
+		phoneVerifiedAt: integer("phone_verified_at", { mode: "timestamp_ms" }),
+		/**
+		 * They texted STOP. Telnyx blocks the number on its side whatever we
+		 * do; this is our copy, so the site sends their texts by email instead
+		 * and can say why. Cleared when they text START.
+		 */
+		smsOptedOutAt: integer("sms_opted_out_at", { mode: "timestamp_ms" }),
+		/**
+		 * Their address bounced hard or reported us as spam. Email stops, and
+		 * whatever they get goes by text if they have a number; somebody with
+		 * no number is put on a break instead, as before texts existed.
+		 */
+		emailBlockedAt: integer("email_blocked_at", { mode: "timestamp_ms" }),
+		emailBlockedReason: text("email_blocked_reason"),
 
 		createdAt: integer("created_at", { mode: "timestamp_ms" })
 			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
@@ -92,7 +118,12 @@ export const user = sqliteTable(
 			.$onUpdate(() => /* @__PURE__ */ new Date())
 			.notNull(),
 	},
-	(table) => [index("user_status_idx").on(table.status)],
+	(table) => [
+		index("user_status_idx").on(table.status),
+		// SQLite cannot add a UNIQUE column; an index does the same job, and
+		// lets any number of people have no phone at all.
+		uniqueIndex("user_phone_uidx").on(table.phone),
+	],
 );
 
 /**

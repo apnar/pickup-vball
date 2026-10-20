@@ -13,6 +13,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { BreakForm, describeBreak } from "@/components/break-form";
+import { NotifyPanel, PhonePanel } from "@/components/notify-settings";
 import PageTitle from "@/components/page-title";
 import SectionKicker from "@/components/section-kicker";
 import { initials } from "@/components/user-menu";
@@ -333,6 +334,11 @@ function RouteComponent() {
 					</div>
 
 					<div>
+						<SectionKicker>Mobile for texts</SectionKicker>
+						<PhonePanel />
+					</div>
+
+					<div>
 						<SectionKicker>Your groups</SectionKicker>
 						<GroupsPanel />
 					</div>
@@ -348,8 +354,8 @@ function RouteComponent() {
 											? `${describeBreak({
 													suspendedUntil: me.data?.suspendedUntil ?? null,
 													reason: me.data?.reason ?? null,
-												})}. You won’t get emails about nights or be on the list until you’re back.`
-											: "You’re active. You’ll get an email when a night is booked, and you can RSVP."}
+												})}. You won’t hear about nights or be on the list until you’re back.`
+											: "You’re active. You’ll hear when a night is booked, and you can RSVP."}
 								</p>
 								{me.isLoading ? null : away ? (
 									<Button
@@ -389,6 +395,11 @@ function RouteComponent() {
 					<div>
 						<SectionKicker>Credits</SectionKicker>
 						<CreditsPanel />
+					</div>
+
+					<div>
+						<SectionKicker>Notifications</SectionKicker>
+						<NotifyPanel />
 					</div>
 
 					<div className="flex flex-col gap-3">

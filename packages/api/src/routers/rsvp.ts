@@ -10,6 +10,7 @@ import { and, asc, desc, eq, isNull, ne } from "drizzle-orm";
 import { z } from "zod";
 
 import { canSee, scopeFor } from "../access";
+import { recordAnswer, requireGame, requireHere, requireSpot } from "../answer";
 import { guestSuggestions, splitAudience } from "../audience";
 import type { Context } from "../context";
 import { CONFIRM_AT, PLAY_AT } from "../cycle";
@@ -25,7 +26,7 @@ const nameSchema = z
 	.trim()
 	.min(1, "Enter a name.")
 	.max(40, "Names can be up to 40 characters.")
-	// Braces are Brevo's template syntax, and a name is the one thing on the
+	// Braces are template syntax, and a name is the one thing on the
 	// sheet a player types that ends up in everybody's email. The mailer
 	// neutralises them anyway; this just says no at the box.
 	.refine((v) => !/[{}]/.test(v), "Names can't contain { or }.");
@@ -177,58 +178,6 @@ function canSet(
 	return false;
 }
 
-async function statusOf(db: Context["db"], userId: string) {
-	const state = await findPersonState(db, userId);
-	return state ? effectiveStatus(state) : "active";
-}
-
-/** Anybody deactivated is simply not here, cached session or not. */
-async function requireHere(db: Context["db"], userId: string) {
-	if ((await statusOf(db, userId)) === "deactivated") {
-		throw new ORPCError("FORBIDDEN", {
-			message: "That account is deactivated.",
-		});
-	}
-}
-
-async function requireSpot(db: Context["db"], userId: string) {
-	const status = await statusOf(db, userId);
-	if (status === "deactivated") {
-		throw new ORPCError("FORBIDDEN", {
-			message: "That account is deactivated.",
-		});
-	}
-	if (status === "suspended") {
-		throw new ORPCError("BAD_REQUEST", {
-			message: "You're on a break. Mark yourself as back first.",
-		});
-	}
-}
-
-/**
- * A night the caller may answer: it exists, it is in one of their groups,
- * and it was not called off. One outside their groups reads as not there at
- * all -- the same answer as a made-up id, so an id cannot be probed.
- */
-async function requireGame(
-	db: Context["db"],
-	person: { id: string; role?: string | null },
-	id: string,
-) {
-	const game = await findGame(db, id);
-	if (!game || !canSee(game, await scopeFor(db, person))) {
-		throw new ORPCError("NOT_FOUND", {
-			message: "That night is not on the schedule.",
-		});
-	}
-	if (game.status === "canceled") {
-		throw new ORPCError("BAD_REQUEST", {
-			message: "That night was called off, so there is nothing to answer.",
-		});
-	}
-	return game;
-}
-
 /** The whole payload, freshly counted, after a write. */
 async function reread(context: Context, gameId: string, fallback: GameSummary) {
 	return listGame(
@@ -252,63 +201,19 @@ export const rsvpRouter = {
 		}),
 
 	/**
-	 * Your own answer. What the buttons in every cycle email eventually call,
-	 * and the only write on that path -- the email link lands on a page, and
-	 * the page waits for a tap.
+	 * Your own answer. What the buttons in every cycle email eventually call
+	 * -- the email link lands on a page, and the page waits for a tap. A text
+	 * reply comes in through the webhook and the same `recordAnswer`.
 	 */
 	respond: protectedProcedure
 		.input(z.object({ gameId: z.string().min(1), answer: answerSchema }))
 		.handler(async ({ context, input }) => {
-			const game = await requireGame(context.db, context.person, input.gameId);
-			const me = context.session.user;
-			// Saying no never needs a spot; saying yes does.
-			if (input.answer === "out") {
-				await requireHere(context.db, me.id);
-			} else {
-				await requireSpot(context.db, me.id);
-			}
-
-			const mine = await context.db
-				.select({ id: rsvp.id, response: rsvp.response })
-				.from(rsvp)
-				.where(and(eq(rsvp.gameId, game.id), eq(rsvp.userId, me.id)))
-				.get();
-
-			if (mine) {
-				await answerRow(context.db, game, mine, { response: input.answer });
-			} else {
-				// Somebody may have typed your name in already, back when the box
-				// took any name. Claim it rather than colliding with the unique
-				// index.
-				const nameKey = nameKeyOf(me.name);
-				const claimed = await context.db
-					.select({ id: rsvp.id, response: rsvp.response })
-					.from(rsvp)
-					.where(and(eq(rsvp.gameId, game.id), eq(rsvp.nameKey, nameKey)))
-					.get();
-				if (claimed) {
-					await answerRow(context.db, game, claimed, {
-						response: input.answer,
-						userId: me.id,
-					});
-				} else {
-					await addRow(context.db, game, {
-						id: crypto.randomUUID(),
-						gameId: game.id,
-						name: me.name,
-						nameKey,
-						response: input.answer,
-						userId: me.id,
-						addedBy: me.id,
-					});
-				}
-			}
-
-			// The confirming yes takes effect immediately rather than at the
-			// next cron pass. Awaited rather than deferred: nothing plumbs an
-			// execution context to oRPC, and the cron would catch it anyway.
-			await promote(context.db, game);
-			await confirmIfReady(context.db, game.id);
+			const { game } = await recordAnswer(
+				context.db,
+				context.person,
+				input.gameId,
+				input.answer,
+			);
 			return reread(context, game.id, game);
 		}),
 

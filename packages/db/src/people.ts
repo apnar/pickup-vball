@@ -43,6 +43,9 @@ export type PersonState = {
 	status: PersonStatus;
 	suspendedUntil: Date | null;
 	statusReason: string | null;
+	/** Verified, or null. */
+	phone: string | null;
+	smsOptedOut: boolean;
 };
 
 /**
@@ -111,6 +114,11 @@ export type Person = {
 	statusChangedAt: Date | null;
 	statusChangedBy: StatusActor | null;
 	linkSentAt: Date | null;
+	phone: string | null;
+	phoneVerifiedAt: Date | null;
+	smsOptedOutAt: Date | null;
+	emailBlockedAt: Date | null;
+	emailBlockedReason: string | null;
 	createdAt: Date;
 };
 
@@ -127,6 +135,11 @@ const personColumns = {
 	statusChangedAt: user.statusChangedAt,
 	statusChangedBy: user.statusChangedBy,
 	linkSentAt: user.linkSentAt,
+	phone: user.phone,
+	phoneVerifiedAt: user.phoneVerifiedAt,
+	smsOptedOutAt: user.smsOptedOutAt,
+	emailBlockedAt: user.emailBlockedAt,
+	emailBlockedReason: user.emailBlockedReason,
 	createdAt: user.createdAt,
 };
 
@@ -193,26 +206,38 @@ export type Recipient = {
 	name: string | null;
 	unsubscribeToken: string | null;
 	linkToken: string | null;
+	/** Verified, or null. Whether to text it is `channelsFor`'s call. */
+	phone: string | null;
+	smsOptedOut: boolean;
+	emailBlocked: boolean;
 };
 
-/** Everyone the next list email should reach, oldest first. */
+/** Everyone the next list send should reach, oldest first. */
 export async function listRecipients(
 	db: Db,
 	audience: Audience = "active",
 	now: Date = new Date(),
 ): Promise<Recipient[]> {
-	return db
+	const rows = await db
 		.select({
 			id: user.id,
 			email: user.email,
 			name: user.name,
 			unsubscribeToken: user.unsubscribeToken,
 			linkToken: user.linkToken,
+			phone: user.phone,
+			smsOptedOutAt: user.smsOptedOutAt,
+			emailBlockedAt: user.emailBlockedAt,
 		})
 		.from(user)
 		.where(audienceWhere(audience, now))
 		.orderBy(asc(user.createdAt))
 		.all();
+	return rows.map(({ smsOptedOutAt, emailBlockedAt, ...row }) => ({
+		...row,
+		smsOptedOut: smsOptedOutAt !== null,
+		emailBlocked: emailBlockedAt !== null,
+	}));
 }
 
 export type LinkPerson = {
@@ -267,11 +292,15 @@ export async function findPersonState(
 			status: user.status,
 			suspendedUntil: user.suspendedUntil,
 			statusReason: user.statusReason,
+			phone: user.phone,
+			smsOptedOutAt: user.smsOptedOutAt,
 		})
 		.from(user)
 		.where(eq(user.id, userId))
 		.get();
-	return row ?? null;
+	if (!row) return null;
+	const { smsOptedOutAt, ...rest } = row;
+	return { ...rest, smsOptedOut: smsOptedOutAt !== null };
 }
 
 /**
@@ -443,6 +472,127 @@ export async function suspendByEmail(
 	return result.meta.changes === 1;
 }
 
+/**
+ * Stop emailing an address that bounced hard or reported us as spam. Their
+ * mail goes by text from here on if they have a number that can take it;
+ * somebody with no other way to reach them is put on a break instead, which
+ * is what happened before texts existed. Says which it was, or null when
+ * the address is nobody's (or is already blocked).
+ */
+export async function blockEmail(
+	db: Db,
+	email: string,
+	input: { reason: string },
+): Promise<"texts" | "break" | null> {
+	const normalized = normalizeEmail(email);
+	const row = await db
+		.select({ phone: user.phone, smsOptedOutAt: user.smsOptedOutAt })
+		.from(user)
+		.where(
+			and(
+				eq(user.email, normalized),
+				notDeactivated(),
+				isNull(user.emailBlockedAt),
+			),
+		)
+		.get();
+	if (!row) return null;
+	await db
+		.update(user)
+		.set({ emailBlockedAt: new Date(), emailBlockedReason: input.reason })
+		.where(and(eq(user.email, normalized), isNull(user.emailBlockedAt)));
+	if (row.phone && !row.smsOptedOutAt) return "texts";
+	await suspendByEmail(db, normalized, input);
+	return "break";
+}
+
+/**
+ * Try their email again: they say the address works now. Nothing on our
+ * side stops a hard-bounced address bouncing again; Telnyx keeps its own
+ * list, and a send to it just fails for that one person.
+ */
+export async function unblockEmail(db: Db, userId: string): Promise<void> {
+	await db
+		.update(user)
+		.set({ emailBlockedAt: null, emailBlockedReason: null })
+		.where(eq(user.id, userId));
+}
+
+/**
+ * Who a text came from. Only a verified number is ever on a row, so a
+ * reply means exactly one person. Nobody deactivated: their replies are
+ * nobody's.
+ */
+export async function findPersonByPhone(
+	db: Db,
+	phone: string,
+): Promise<PersonState | null> {
+	const row = await db
+		.select({
+			id: user.id,
+			email: user.email,
+			name: user.name,
+			role: user.role,
+			status: user.status,
+			suspendedUntil: user.suspendedUntil,
+			statusReason: user.statusReason,
+			phone: user.phone,
+			smsOptedOutAt: user.smsOptedOutAt,
+		})
+		.from(user)
+		.where(and(eq(user.phone, phone), notDeactivated()))
+		.get();
+	if (!row) return null;
+	const { smsOptedOutAt, ...rest } = row;
+	return { ...rest, smsOptedOut: smsOptedOutAt !== null };
+}
+
+/**
+ * The number they just proved is theirs. A new number starts opted in: the
+ * code reached it, which a number that had texted STOP would not allow.
+ * Throws on the unique index if somebody else has it; the caller says so.
+ */
+export async function setVerifiedPhone(
+	db: Db,
+	userId: string,
+	phone: string,
+): Promise<void> {
+	await db
+		.update(user)
+		.set({ phone, phoneVerifiedAt: new Date(), smsOptedOutAt: null })
+		.where(eq(user.id, userId));
+}
+
+/** No more texts to this person; anything set to text falls back to email. */
+export async function removePhone(db: Db, userId: string): Promise<void> {
+	await db
+		.update(user)
+		.set({ phone: null, phoneVerifiedAt: null, smsOptedOutAt: null })
+		.where(eq(user.id, userId));
+}
+
+/**
+ * Mirror a STOP or a START. Telnyx enforces it on its side regardless; this
+ * is so the site knows to send by email instead, and can say why.
+ */
+export async function setSmsOptOut(
+	db: Db,
+	phone: string,
+	optedOut: boolean,
+): Promise<boolean> {
+	const result = await db
+		.update(user)
+		.set({ smsOptedOutAt: optedOut ? new Date() : null })
+		.where(
+			and(
+				eq(user.phone, phone),
+				optedOut ? isNull(user.smsOptedOutAt) : isNotNull(user.smsOptedOutAt),
+			),
+		)
+		.run();
+	return result.meta.changes === 1;
+}
+
 /** Who a list-email footer link belongs to. Null when the token means nothing. */
 export async function findPersonByUnsubscribeToken(
 	db: Db,
@@ -469,6 +619,8 @@ export async function findPersonByUnsubscribeToken(
 /**
  * Back on the list. Lifts a suspension only — a deactivated row is left
  * alone, so no self-service path can ever turn into a way to lift a ban.
+ * Clears a blocked email too: somebody the mail put on a break, coming back
+ * through the site, is saying the address works again.
  */
 export async function unsuspend(db: Db, userId: string): Promise<boolean> {
 	const result = await db
@@ -479,6 +631,8 @@ export async function unsuspend(db: Db, userId: string): Promise<boolean> {
 			statusReason: null,
 			statusChangedAt: new Date(),
 			statusChangedBy: null,
+			emailBlockedAt: null,
+			emailBlockedReason: null,
 		})
 		.where(and(eq(user.id, userId), eq(user.status, "suspended")))
 		.run();

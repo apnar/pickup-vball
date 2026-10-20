@@ -50,6 +50,13 @@
 			"when": 1792447392523,
 			"tag": "0006_night_per_gym",
 			"breakpoints": true
+		},
+		{
+			"idx": 7,
+			"version": "6",
+			"when": 1792527216323,
+			"tag": "0007_notify",
+			"breakpoints": true
 		}
 	]
 }

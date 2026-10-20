@@ -10,7 +10,7 @@ import { env } from "@pickup-vball/env/server";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 
-import { brevoWebhook } from "./brevo-webhook";
+import { telnyxWebhook } from "./telnyx-webhook";
 import { unsubscribe } from "./unsubscribe";
 
 /**
@@ -117,6 +117,6 @@ app.get("/permits/:id/file", async (c) => {
 });
 
 app.route("/unsubscribe", unsubscribe);
-app.route("/brevo/webhook", brevoWebhook);
+app.route("/telnyx/webhook", telnyxWebhook);
 
 app.get("/health", (c) => c.text("OK"));

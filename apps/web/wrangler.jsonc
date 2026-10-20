@@ -15,17 +15,23 @@
 	"observability": {
 		"enabled": true
 	},
-	// Every half hour, because the verdict falls at 7:30. Nothing else about
-	// the schedule lives here: the handler in src/server.ts derives every
-	// moment from the gym's clock, so this only has to be frequent enough,
-	// never correct, and daylight saving never touches it.
+	// Every half hour for the RSVP cycle, because the 11:30 last call falls
+	// on one. Nothing else about the schedule lives here: the handler in
+	// src/server.ts derives every moment from the gym's clock, so this only
+	// has to be frequent enough, never correct, and daylight saving never
+	// touches it. Every minute for the text outbox, which a run drains a few
+	// dozen at a time; with nothing due that run is one query.
 	"triggers": {
-		"crons": ["0,30 * * * *"]
+		"crons": ["0,30 * * * *", "* * * * *"]
 	},
 	"vars": {
 		// Canonical public origin of the site. Better Auth uses it for cookies
 		// and callbacks, and src/server.ts redirects other hosts to it.
-		"BETTER_AUTH_URL": "https://vball.moco-pickup.com"
+		"BETTER_AUTH_URL": "https://vball.moco-pickup.com",
+		// Our texting number (E.164) and its messaging profile, once bought
+		// and registered (README "Texts").
+		"TELNYX_FROM_NUMBER": "",
+		"TELNYX_MESSAGING_PROFILE_ID": ""
 	},
 	"r2_buckets": [
 		{

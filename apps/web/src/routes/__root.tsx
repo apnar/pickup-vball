@@ -85,7 +85,8 @@ function RootDocument() {
 					</div>
 					<footer className="mx-auto flex w-full max-w-[1200px] flex-wrap justify-between gap-2 px-5 pt-10 pb-8 text-[13px] text-subtle leading-6 md:px-[clamp(16px,4vw,40px)]">
 						<span>
-							{SITE_NAME} · {SITE_AREA}
+							{SITE_NAME} · {SITE_AREA} · <Link to="/sms">Texts</Link> ·{" "}
+							<Link to="/privacy">Privacy</Link>
 						</span>
 						{session ? (
 							<Link to="/rules" className="md:hidden">

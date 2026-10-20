@@ -17,14 +17,18 @@ export const EMAIL_KINDS = [
 	"waitlist_in",
 	/** One player's receipt when an admin adds credits they paid for. */
 	"credits_added",
+	/** A few hours before a night that is on, to the people who are in. */
+	"reminder",
+	/** A player's balance fell to the last credit when a night was closed. */
+	"low_credit",
+	/** A full night with nobody waiting has a spot again. */
+	"spot_open",
 	/**
-	 * Legacy. Nothing writes these any more -- the RSVP cycle replaced the
-	 * announce-on-booking email and the 9 AM reminder -- but rows from before
-	 * it still carry them and the admin log renders them, so the union has to
-	 * admit they exist.
+	 * Legacy. Nothing writes it any more -- the RSVP cycle replaced the
+	 * announce-on-booking email -- but rows from before it may still carry
+	 * it and the admin log renders them, so the union has to admit it.
 	 */
 	"announcement",
-	"reminder",
 ] as const;
 export type EmailKind = (typeof EMAIL_KINDS)[number];
 
@@ -48,11 +52,14 @@ export const emailSend = sqliteTable(
 		audience: text("audience", { enum: EMAIL_AUDIENCES })
 			.notNull()
 			.default("active"),
+		/** How many got it by email. */
 		recipientCount: integer("recipient_count").notNull(),
+		/** How many it was queued to by text (`sms_out` rows carry `send_id`). */
+		textCount: integer("text_count").notNull().default(0),
 		failedCount: integer("failed_count").notNull().default(0),
-		/** JSON array of Brevo message ids, one per batch. */
+		/** JSON array of Telnyx message ids, one per copy sent. */
 		messageIds: text("message_ids").notNull().default("[]"),
-		/** JSON array of { emails, error } for batches Brevo rejected. */
+		/** JSON array of { emails, error } for copies Telnyx refused. */
 		errors: text("errors").notNull().default("[]"),
 		sentBy: text("sent_by").references(() => user.id, {
 			onDelete: "set null",

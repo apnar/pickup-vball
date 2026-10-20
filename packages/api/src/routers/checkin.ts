@@ -14,6 +14,7 @@ import type { Context } from "../context";
 import { isUniqueViolation } from "../db-errors";
 import { findGame } from "../games";
 import { adminProcedure } from "../index";
+import { tellLowCredit } from "../jobs/alerts";
 import { readSheet } from "../mail";
 import { todayInRunTimezone } from "../run";
 
@@ -179,6 +180,10 @@ export const checkinRouter = {
 				throw error;
 			}
 			if (!result.closed) alreadyClosed();
+			// The charge stands whatever the alert does.
+			await tellLowCredit(context.db, game.id).catch((error) =>
+				console.error("low credit alert failed", error),
+			);
 			return { charged: result.charged };
 		}),
 };

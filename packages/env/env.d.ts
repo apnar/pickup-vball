@@ -11,15 +11,24 @@ export interface CloudflareEnv {
 	/** Public origin of the deployed Worker (wrangler.jsonc `vars`). */
 	BETTER_AUTH_URL: string;
 	/**
-	 * Secret: `wrangler secret put BREVO_API_KEY` (or .dev.vars locally).
-	 * Optional: without it emails are logged to the console, not sent.
+	 * Secret: `wrangler secret put TELNYX_API_KEY` (or .dev.vars locally).
+	 * Optional: without it emails and texts are logged to the console, not
+	 * sent.
 	 */
-	BREVO_API_KEY?: string;
+	TELNYX_API_KEY?: string;
 	/**
-	 * Secret: `wrangler secret put BREVO_WEBHOOK_SECRET`. Bearer token Brevo
-	 * sends to /api/brevo/webhook. Without it the webhook route answers 404.
+	 * Secret: `wrangler secret put TELNYX_PUBLIC_KEY`. The account's Ed25519
+	 * public key (base64), which signs every webhook to /api/telnyx/webhook.
+	 * Without it the webhook route answers 404.
 	 */
-	BREVO_WEBHOOK_SECRET?: string;
+	TELNYX_PUBLIC_KEY?: string;
+	/**
+	 * Our texting number, E.164 (wrangler.jsonc `vars`). Empty until one is
+	 * bought and registered; texts then fail rather than send.
+	 */
+	TELNYX_FROM_NUMBER?: string;
+	/** The messaging profile the number is on (wrangler.jsonc `vars`). */
+	TELNYX_MESSAGING_PROFILE_ID?: string;
 }
 
 declare module "cloudflare:workers" {

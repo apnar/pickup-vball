@@ -1,5 +1,5 @@
-import type { Rendered } from "../brevo";
 import { button, escapeHtml, layout, muted, para, urlLink } from "../render";
+import type { Rendered } from "../telnyx";
 
 export type ResetPasswordInput = { name: string; url: string };
 

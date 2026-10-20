@@ -84,3 +84,46 @@ export const rules = [
 		body: "The net goes to women’s height (7 ft 4⅛ in), and men can’t attack or block in front of the 3 m line.",
 	},
 ] as const;
+
+/**
+ * The text-message program, as a carrier reviewing our number reads it:
+ * the opt-in box on /dashboard says `consent` word for word, and /sms and
+ * /privacy are the public pages the registration links to. Change them
+ * together, and tell the campaign registration if the substance changes.
+ */
+export const TEXTS = {
+	consent: `Text me about nights I play from ${SITE_NAME}: the call, reminders, whether a night is on, and anything I turn on below. Frequency varies, usually a few texts a week. Msg & data rates may apply. Reply STOP to opt out, HELP for help.`,
+	program: [
+		`${SITE_NAME} is an invite-only pickup volleyball group in ${SITE_AREA}. Members can choose to get some or all of the group's messages by text instead of, or as well as, email.`,
+		"What we text: the evening-before call for a night, reminders to answer while a night is short, whether a night is on or called off, a spot opening up for you off the waitlist, a game-day reminder, credit receipts and low-credit alerts, and group updates from the organisers. Each member chooses which of these come by text.",
+		"How you opt in: signed in to the site, a member enters their mobile number on their account page, ticks a box agreeing to texts, and types back the 6-digit code we text to that number. Nobody is texted without doing this, and admins cannot add a number for anyone.",
+		"Frequency varies with the schedule, usually a few texts a week. Message and data rates may apply.",
+		"Reply STOP at any time to stop all texts, and START to have them back. Reply HELP for help. Replying IN, OUT or MAYBE answers for the night we last texted you about.",
+		"Mobile numbers are used only to send these texts. We never sell or share them, or use them for marketing.",
+	],
+	help: "Questions about the texts? Ask an organiser at the gym, or reply HELP.",
+} as const;
+
+/** The privacy policy, in full. Short because the site keeps little. */
+export const PRIVACY = [
+	{
+		heading: "What we keep",
+		body: `${SITE_NAME} keeps what it needs to run the nights: your name, your email address, your mobile number if you add one, your answers for each night, your check-ins, and your credit balance and payments.`,
+	},
+	{
+		heading: "How we use it",
+		body: "To tell you about nights, to keep the headcount and the waitlist, and to keep the credits straight. Email and texts go out through our messaging provider, Telnyx, which handles them only to deliver them.",
+	},
+	{
+		heading: "Mobile numbers",
+		body: "Your number is used only to send the texts you chose and to read your replies. We never sell or share mobile numbers or opt-in data with anyone, and never use them for marketing. Reply STOP to stop texts, or remove your number from your account page.",
+	},
+	{
+		heading: "Who sees what",
+		body: "Other members see your name on a night's list. The organisers see your contact details, answers and credits. Nobody else does.",
+	},
+	{
+		heading: "Leaving",
+		body: "Ask an organiser and they will take you off the group. Removing your number or replying STOP stops texts at once.",
+	},
+] as const;

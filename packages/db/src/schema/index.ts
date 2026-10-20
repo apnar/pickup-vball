@@ -5,5 +5,6 @@ export * from "./game";
 export * from "./group";
 export * from "./gym";
 export * from "./invite";
+export * from "./notify";
 export * from "./permit";
 export * from "./rsvp";

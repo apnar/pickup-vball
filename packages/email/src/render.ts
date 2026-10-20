@@ -16,9 +16,10 @@ export function escapeHtml(value: string): string {
 }
 
 /**
- * Brevo replaces these in both bodies and headers when the request carries
- * `params` (or per-recipient `messageVersions[].params`). Only list emails
- * use them; never run escapeHtml over the output of this helper.
+ * Placeholders for the parts of a list email that differ per reader. The
+ * mailer fills them in, one copy per person, just before the email leaves
+ * (`fillParams`). Only list emails use them; never run escapeHtml over the
+ * output of this helper.
  */
 export const PARAM = {
 	name: "{{ params.name }}",
@@ -28,14 +29,35 @@ export const PARAM = {
 } as const;
 
 /**
- * Brevo runs its template language over the whole body whenever a request
- * carries `params`, which every list email does. That is how the three
- * placeholders above get filled, and also how a guest called `{% if %}` gets
- * the whole send rejected -- and the cycle then retries it every half hour.
- * This puts a zero-width space after any `{` that opens a tag, everywhere
- * except inside our own placeholders, so what a person typed renders as they
- * typed it and means nothing to Brevo. Runs last, over the finished email,
- * which is the one place that can tell our braces from theirs.
+ * Fill the placeholders in for one reader. In the HTML part the values are
+ * escaped, since a name can hold anything; the tokens and URLs we put there
+ * come out unchanged.
+ */
+export function fillParams(
+	input: string,
+	params: Record<string, string> | undefined,
+	opts: { html?: boolean } = {},
+): string {
+	let out = input;
+	for (const [name, value] of Object.entries(params ?? {})) {
+		out = out.replaceAll(
+			`{{ params.${name} }}`,
+			opts.html ? escapeHtml(value) : value,
+		);
+	}
+	return out;
+}
+
+/**
+ * Puts a zero-width space after any `{` that opens a template tag,
+ * everywhere except inside our own placeholders, so what a person typed (a
+ * guest's name, a note) renders as they typed it and means nothing to a
+ * template language. Telnyx documents Liquid only for sends that name a
+ * stored template, which ours never do, so this is insurance: if a plain
+ * body were ever run through it, a guest called `{% if %}` would get a whole
+ * cycle send rejected, and the cycle would retry it every half hour. Runs
+ * over the finished email, the one place that can tell our braces from
+ * theirs, and before `fillParams`, so the values filled in are untouched.
  */
 export function sealTemplate(input: string): string {
 	const keep = Object.values(PARAM)

@@ -1,4 +1,4 @@
-import type { Address } from "./brevo";
+import type { Address } from "./telnyx";
 
 /**
  * The name at the top of every email and in the From line. Mirrors SITE_NAME
@@ -7,11 +7,10 @@ import type { Address } from "./brevo";
 export const SITE_NAME = "Viroj’s Pickup";
 
 /**
- * The verified sender in Brevo.
- *
- * The address is a placeholder carried over from the site this one was copied
- * from, until email is set up for this group's own domain. Brevo refuses a
- * sender it has not verified, so change it only after the new one is.
+ * The From address. Telnyx sends from any address on a domain verified in
+ * the account (moco-pickup.com, README "Email"); the mailbox itself is a
+ * placeholder carried over from the site this one was copied from, and
+ * replies to it go wherever that domain's mail goes.
  */
 export const SENDER: Address = {
 	name: SITE_NAME,

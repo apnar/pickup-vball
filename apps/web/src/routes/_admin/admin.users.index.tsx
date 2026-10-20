@@ -1,3 +1,4 @@
+import { formatUsPhone } from "@pickup-vball/api/phone";
 import {
 	RESPONSE_WINDOW,
 	type ResponseRate,
@@ -124,6 +125,15 @@ function AdminPeoplePage() {
 				toast.success(
 					result.dryRun ? "Link printed to the server log." : "Link sent.",
 				);
+				refresh();
+			},
+			onError,
+		}),
+	);
+	const removePhone = useMutation(
+		orpc.people.removePhone.mutationOptions({
+			onSuccess: () => {
+				toast.success("Number removed. Their texts go by email now.");
 				refresh();
 			},
 			onError,
@@ -386,7 +396,18 @@ function AdminPeoplePage() {
 										</Link>
 										<span className="wrap-anywhere block text-[14px] text-subtle">
 											{p.email}
+											{p.emailBlockedAt ? (
+												<span className="text-warn"> · bouncing</span>
+											) : null}
 										</span>
+										{p.phone ? (
+											<span className="tnum block text-[14px] text-subtle">
+												{formatUsPhone(p.phone)}
+												{p.smsOptedOutAt ? (
+													<span className="text-warn"> · texted STOP</span>
+												) : null}
+											</span>
+										) : null}
 									</td>
 									<td>
 										<span className={pill(admin ? "accent" : "neutral")}>
@@ -459,6 +480,19 @@ function AdminPeoplePage() {
 													>
 														Send link
 													</Button>
+													{p.phone ? (
+														<Button
+															variant="ghost"
+															size="xs"
+															disabled={removePhone.isPending}
+															title="Stops texts to this number. Only they can add a number back, by confirming a code."
+															onClick={() =>
+																removePhone.mutate({ userId: p.id })
+															}
+														>
+															Remove number
+														</Button>
+													) : null}
 													<Button
 														variant="ghost"
 														size="xs"

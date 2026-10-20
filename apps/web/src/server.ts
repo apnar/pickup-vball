@@ -1,4 +1,6 @@
+import { sendReminders } from "@pickup-vball/api/jobs/alerts";
 import { runRsvpCycle } from "@pickup-vball/api/jobs/rsvp-cycle";
+import { drainTexts } from "@pickup-vball/api/jobs/sms-drain";
 import { createDb } from "@pickup-vball/db";
 import { sweepExpiredSuspensions } from "@pickup-vball/db/people";
 import { env } from "@pickup-vball/env/server";
@@ -54,11 +56,13 @@ export default {
 	fetch: entry.fetch,
 
 	/**
-	 * Cron Trigger (wrangler.jsonc `triggers.crons`, every half hour). Runs
-	 * the RSVP cycle -- the five emails and the 1 PM verdict, all of it
-	 * described on /admin/cycle -- and tidies suspensions that have run out.
-	 * Test locally with
-	 * `curl "http://localhost:3001/cdn-cgi/local/scheduled?cron=0+*+*+*+*"`.
+	 * Cron Triggers (wrangler.jsonc `triggers.crons`). Every minute: send
+	 * what is due from the text outbox. Every half hour: the RSVP cycle --
+	 * the five emails and the 1 PM verdict, all of it described on
+	 * /admin/cycle -- the game-day reminders, and tidying suspensions that
+	 * have run out. Test locally with
+	 * `curl "http://localhost:3001/cdn-cgi/local/scheduled?cron=0+*+*+*+*"`
+	 * (the cycle) or `?cron=*+*+*+*+*` (the outbox).
 	 */
 	async scheduled(
 		controller: { scheduledTime: number; cron: string },
@@ -66,11 +70,32 @@ export default {
 		ctx: { waitUntil(promise: Promise<unknown>): void },
 	) {
 		const now = new Date(controller.scheduledTime);
+		if (controller.cron === "* * * * *") {
+			ctx.waitUntil(
+				drainTexts(createDb(), now).then(
+					(r) =>
+						(r.sent || r.failed || r.skipped) &&
+						console.log("texts", JSON.stringify(r)),
+					(error) => console.error("text drain failed", error),
+				),
+			);
+			return;
+		}
+		// One db, one after the other: a run gets fifty outside calls, and the
+		// first send to queue texts spends thirty of them draining.
+		const db = createDb();
 		ctx.waitUntil(
-			runRsvpCycle(createDb(), now).then(
-				(result) => console.log("rsvp cycle", JSON.stringify(result)),
-				(error) => console.error("rsvp cycle failed", error),
-			),
+			runRsvpCycle(db, now)
+				.then(
+					(result) => console.log("rsvp cycle", JSON.stringify(result)),
+					(error) => console.error("rsvp cycle failed", error),
+				)
+				.then(() => sendReminders(db, now))
+				.then(
+					(sent) =>
+						sent.length > 0 && console.log("reminders", JSON.stringify(sent)),
+					(error) => console.error("reminders failed", error),
+				),
 		);
 		// Housekeeping only: an expired suspension already counts as active
 		// everywhere it matters, so a missed run costs nothing but a stale

@@ -56,6 +56,7 @@ function AdminEmailPage() {
 	const [confirmKey, setConfirmKey] = useState<string | null>(null);
 	const [subject, setSubject] = useState("");
 	const [body, setBody] = useState("");
+	const [textVersion, setTextVersion] = useState("");
 	const [audience, setAudience] = useState<"active" | "everyone">("active");
 
 	const onError = (error: Error) => toast.error(error.message);
@@ -101,11 +102,16 @@ function AdminEmailPage() {
 		orpc.mail.sendMessage.mutationOptions({
 			onSuccess: (result, input) => {
 				if (input.toSelf) {
-					toast.success("Sent to you. Check your inbox.");
+					toast.success(
+						result.texted
+							? "Sent to you by email and text."
+							: "Sent to you. Check your inbox.",
+					);
 				} else {
 					reportSend(result);
 					setSubject("");
 					setBody("");
+					setTextVersion("");
 					setPreview(null);
 				}
 				refreshAll();
@@ -153,8 +159,19 @@ function AdminEmailPage() {
 
 			{status.data?.dryRun ? (
 				<p className="m-0 rounded-card bg-warn-bg p-4 text-warn">
-					BREVO_API_KEY isn't set here, so emails are printed to the server log
-					instead of being sent. Everything else works normally.
+					TELNYX_API_KEY isn't set here, so emails and texts are printed to the
+					server log instead of being sent. Everything else works normally.
+				</p>
+			) : null}
+			{status.data && status.data.outbox.queued > 0 ? (
+				<p className="m-0 text-subtle">
+					<span className="tnum">{status.data.outbox.queued}</span>{" "}
+					{status.data.outbox.queued === 1 ? "text is" : "texts are"} waiting to
+					go
+					{status.data.outbox.due < status.data.outbox.queued
+						? ", some held for the morning (no texts 9 PM to 8 AM)"
+						: ", a few dozen a minute"}
+					.
 				</p>
 			) : null}
 
@@ -283,7 +300,12 @@ function AdminEmailPage() {
 							className="flex flex-col gap-4"
 							onSubmit={(e) => {
 								e.preventDefault();
-								previewMessage.mutate({ subject, body, audience });
+								previewMessage.mutate({
+									subject,
+									body,
+									audience,
+									text: textVersion,
+								});
 							}}
 						>
 							<div className="flex flex-col gap-1.5">
@@ -309,6 +331,26 @@ function AdminEmailPage() {
 									value={body}
 									onChange={(e) => setBody(e.target.value)}
 								/>
+							</div>
+							<div className="flex flex-col gap-1.5">
+								<Label htmlFor="text-version">Text version</Label>
+								<Textarea
+									id="text-version"
+									maxLength={300}
+									rows={2}
+									placeholder={
+										subject || "Gym closed next week. Back the week after."
+									}
+									value={textVersion}
+									onChange={(e) => {
+										setTextVersion(e.target.value);
+										setPreview(null);
+									}}
+								/>
+								<p className="m-0 text-[14px] text-subtle">
+									For people who get group updates by text. Blank sends the
+									subject. {textVersion.length}/300
+								</p>
 							</div>
 							<fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
 								<legend className="kicker mb-1.5 p-0">Who gets it</legend>
@@ -360,6 +402,7 @@ function AdminEmailPage() {
 											subject,
 											body,
 											audience,
+											text: textVersion,
 											toSelf: true,
 										})
 									}
@@ -377,6 +420,7 @@ function AdminEmailPage() {
 												subject,
 												body,
 												audience,
+												text: textVersion,
 												toSelf: false,
 											});
 										} else {
@@ -426,9 +470,16 @@ function AdminEmailPage() {
 								</div>
 								<div className="flex flex-wrap items-center gap-2 text-[14px] text-subtle">
 									<span>
-										<span className="capitalize">{row.kind}</span> ·{" "}
-										<span className="tnum">{row.recipientCount}</span> recipient
-										{row.recipientCount === 1 ? "" : "s"}
+										<span className="capitalize">
+											{row.kind.replaceAll("_", " ")}
+										</span>{" "}
+										· <span className="tnum">{row.recipientCount}</span> emailed
+										{row.textCount > 0 ? (
+											<>
+												{" "}
+												· <span className="tnum">{row.textCount}</span> texted
+											</>
+										) : null}
 									</span>
 									{row.audience === "everyone" ? (
 										<span className={pill("neutral")}>Everyone</span>

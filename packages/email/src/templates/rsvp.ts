@@ -5,7 +5,6 @@
  * five times.
  */
 
-import type { Rendered } from "../brevo";
 import { type RsvpAnswer, rsvpLink } from "../links";
 import {
 	button,
@@ -18,6 +17,7 @@ import {
 	muted,
 	para,
 } from "../render";
+import type { Rendered } from "../telnyx";
 
 export type RsvpFacts = {
 	gameId: string;

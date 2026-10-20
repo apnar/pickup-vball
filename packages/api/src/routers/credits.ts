@@ -11,7 +11,7 @@ import {
 } from "@pickup-vball/db/credits";
 import { findPerson, listPeople } from "@pickup-vball/db/people";
 import { PAYMENT_METHODS } from "@pickup-vball/db/schema/credit";
-import { creditsAddedEmail } from "@pickup-vball/email";
+import { creditsAddedEmail, creditsAddedText } from "@pickup-vball/email";
 import { getMailer, siteUrl } from "@pickup-vball/email/worker";
 import { z } from "zod";
 
@@ -197,20 +197,22 @@ export const creditsRouter = {
 			try {
 				// "everyone" so somebody on a break still gets their receipt;
 				// nobody deactivated is in either audience.
+				const receipt = {
+					added: input.credits,
+					balance,
+					method: METHOD_LABEL[input.method],
+					amountUsd,
+					siteUrl: siteUrl(),
+				};
 				const result = await sendToList(context.db, {
 					kind: "credits_added",
-					rendered: creditsAddedEmail({
-						added: input.credits,
-						balance,
-						method: METHOD_LABEL[input.method],
-						amountUsd,
-						siteUrl: siteUrl(),
-					}),
+					rendered: creditsAddedEmail(receipt),
+					text: creditsAddedText(receipt),
 					sentBy: context.person.id,
 					audience: "everyone",
 					onlyPersonIds: [person.id],
 				});
-				emailed = (result?.sent ?? 0) > 0;
+				emailed = (result?.sent ?? 0) + (result?.texted ?? 0) > 0;
 			} catch (error) {
 				console.error("credits receipt failed", error);
 			}

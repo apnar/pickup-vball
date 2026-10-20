@@ -1,15 +1,14 @@
+import { fillParams, sealTemplate } from "./render";
 import {
 	type Address,
-	type BrevoRequest,
 	chunk,
-	MAX_VERSIONS_PER_CALL,
-	type MessageVersion,
-	postBrevo,
+	type EmailMessage,
+	MAX_EMAILS_PER_BATCH,
+	postEmail,
+	postEmailBatch,
 	type Rendered,
 	type SendOutcome,
-	unblockContact,
-} from "./brevo";
-import { sealTemplate } from "./render";
+} from "./telnyx";
 
 /** Someone on the list, with the link that takes them off it. */
 export type ListRecipient = {
@@ -37,16 +36,14 @@ export type Mailer = {
 		opts?: { tags?: string[]; params?: Record<string, string> },
 	): Promise<SendOutcome>;
 	/**
-	 * One email to everyone on the list, personalised per recipient through
-	 * Brevo `messageVersions` so each copy carries its own unsubscribe link.
+	 * One email to everyone on the list, a copy per recipient so each one
+	 * carries its own sign-in key and unsubscribe link.
 	 */
 	sendList(
 		recipients: ListRecipient[],
 		rendered: Rendered,
 		opts?: { tags?: string[] },
 	): Promise<ListResult>;
-	/** Lift Brevo's transactional block on an address that rejoined the list. */
-	unblock(email: string): Promise<boolean>;
 };
 
 export type MailerOptions = {
@@ -57,15 +54,26 @@ export type MailerOptions = {
 	log?: (line: string) => void;
 };
 
-function versionsFor(recipients: ListRecipient[]): MessageVersion[] {
-	return recipients.map((r) => ({
-		to: [{ email: r.email, name: r.name }],
-		params: {
-			name: r.name ?? "",
-			unsubscribeUrl: r.unsubscribeUrl,
-			key: r.linkToken ?? "",
-		},
-	}));
+function paramsFor(r: ListRecipient): Record<string, string> {
+	return {
+		name: r.name ?? "",
+		unsubscribeUrl: r.unsubscribeUrl,
+		key: r.linkToken ?? "",
+	};
+}
+
+/**
+ * RFC 8058 one-click unsubscribe, pointing at our own form's POST, which
+ * starts an open-ended break. Ours rather than Telnyx's (its
+ * `unsubscribe_tracking` is switched off on the domain): leaving the email
+ * means stepping away from the nights, and only the site can do that.
+ */
+function unsubscribeHeaders(url: string | undefined) {
+	if (!url) return undefined;
+	return {
+		"List-Unsubscribe": `<${url}>`,
+		"List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+	};
 }
 
 export function createMailer(options: MailerOptions): Mailer {
@@ -73,57 +81,52 @@ export function createMailer(options: MailerOptions): Mailer {
 	const apiKey = options.apiKey?.trim();
 	const dryRun = !apiKey;
 
-	// Sealed here, at the last door out, so no template can forget to. See
+	// Sealed here, at the last door out, so no template can forget to, and
+	// filled in after, so the seal never touches what goes in. See
 	// `sealTemplate` for why a guest's name needs it.
-	function base(rendered: Rendered, tags?: string[]): BrevoRequest {
+	function message(
+		to: Address,
+		rendered: Rendered,
+		params: Record<string, string> | undefined,
+		tags: string[] | undefined,
+	): EmailMessage {
 		return {
-			sender: options.sender,
-			replyTo: options.replyTo,
-			subject: sealTemplate(rendered.subject),
-			htmlContent: sealTemplate(rendered.html),
-			textContent: sealTemplate(rendered.text),
+			from: options.sender,
+			to: [to],
+			reply_to: options.replyTo,
+			subject: fillParams(sealTemplate(rendered.subject), params),
+			html_body: fillParams(sealTemplate(rendered.html), params, {
+				html: true,
+			}),
+			text_body: fillParams(sealTemplate(rendered.text), params),
+			headers: unsubscribeHeaders(params?.unsubscribeUrl),
 			tags,
+			tracking_settings: { open_tracking: false, click_tracking: false },
 		};
 	}
 
-	/**
-	 * Print the email instead of sending it. `params` are substituted the way
-	 * Brevo would, so a sign-in link in the console is clickable.
-	 */
-	function logDryRun(
-		label: string,
-		rendered: Rendered,
-		params?: Record<string, string>,
-	) {
-		let text = rendered.text;
-		for (const [name, value] of Object.entries(params ?? {})) {
-			text = text.replaceAll(`{{ params.${name} }}`, value);
-		}
+	/** Print the email instead of sending it, links clickable. */
+	function logDryRun(label: string, m: EmailMessage) {
 		log(
 			[
 				`[email dry run] ${label}`,
-				`Subject: ${rendered.subject}`,
+				`Subject: ${m.subject}`,
 				"",
-				text,
+				m.text_body,
 			].join("\n"),
 		);
-	}
-
-	async function send(body: BrevoRequest): Promise<SendOutcome> {
-		if (!apiKey) return { ok: true, messageId: "dry-run" };
-		return postBrevo(body, { apiKey, fetch: options.fetch });
 	}
 
 	return {
 		dryRun,
 
 		async sendOne(to, rendered, opts) {
-			if (dryRun) logDryRun(`to ${to.email}`, rendered, opts?.params);
-			return send({
-				...base(rendered, opts?.tags),
-				to: [to],
-				params: opts?.params,
-			});
+			const m = message(to, rendered, opts?.params, opts?.tags);
+			if (!apiKey) {
+				logDryRun(`to ${to.email}`, m);
+				return { ok: true, messageId: "dry-run" };
+			}
+			return postEmail(m, { apiKey, fetch: options.fetch });
 		},
 
 		async sendList(recipients, rendered, opts) {
@@ -134,42 +137,45 @@ export function createMailer(options: MailerOptions): Mailer {
 				messageIds: [],
 			};
 			if (recipients.length === 0) return result;
-			if (dryRun) {
-				logDryRun(
-					`to ${recipients.length} subscriber(s)`,
+			const messages = recipients.map((r) =>
+				message(
+					{ email: r.email, name: r.name },
 					rendered,
-					versionsFor(recipients.slice(0, 1))[0]?.params,
-				);
+					paramsFor(r),
+					opts?.tags,
+				),
+			);
+			if (!apiKey) {
+				// One copy is enough to read; it is the first reader's.
+				const [first] = messages;
+				if (first) logDryRun(`to ${recipients.length} subscriber(s)`, first);
+				result.sent = recipients.length;
+				result.messageIds.push("dry-run");
+				return result;
 			}
-			for (const batch of chunk(recipients, MAX_VERSIONS_PER_CALL)) {
-				// No List-Unsubscribe header here: Brevo replaces it with its own
-				// one-click link on every email. The app learns about those through
-				// the Brevo webhook; the footer link in each template is ours.
-				const outcome = await send({
-					...base(rendered, opts?.tags),
-					messageVersions: versionsFor(batch),
+			for (const batch of chunk(messages, MAX_EMAILS_PER_BATCH)) {
+				const outcome = await postEmailBatch(batch, {
+					apiKey,
+					fetch: options.fetch,
 				});
-				if (outcome.ok) {
-					result.sent += batch.length;
-					result.messageIds.push(outcome.messageId);
-				} else {
+				const emailsAt = (i: number) => batch[i]?.to[0]?.email ?? "";
+				if (!outcome.ok) {
 					result.failed.push({
-						emails: batch.map((r) => r.email),
+						emails: batch.map((_, i) => emailsAt(i)),
 						error: `${outcome.status}: ${outcome.error}`.slice(0, 500),
+					});
+					continue;
+				}
+				result.sent += batch.length - outcome.errors.length;
+				result.messageIds.push(...outcome.ids);
+				for (const e of outcome.errors) {
+					result.failed.push({
+						emails: [emailsAt(e.index)],
+						error: e.error.slice(0, 500),
 					});
 				}
 			}
 			return result;
-		},
-
-		async unblock(email) {
-			if (!apiKey) return true;
-			const result = await unblockContact(email, {
-				apiKey,
-				fetch: options.fetch,
-			});
-			if (!result.ok) log(`[email] unblock ${email} failed: ${result.status}`);
-			return result.ok;
 		},
 	};
 }

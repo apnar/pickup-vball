@@ -31,8 +31,8 @@ describe("sealTemplate", () => {
 			),
 		);
 		// A guest literally named after the placeholder is still the
-		// placeholder: Brevo fills it with the reader's own values, which leaks
-		// nothing across recipients. What matters is nothing else gets through.
+		// placeholder: the mailer fills it with the reader's own values, which
+		// leaks nothing across recipients. What matters is nothing else gets through.
 		expect(sealTemplate("{{ params.name }}x{{ evil }}")).toBe(
 			`${PARAM.name}x{${ZW}{ evil }}`,
 		);
@@ -46,12 +46,12 @@ describe("sealTemplate", () => {
 
 describe("the mailer seals what it sends", () => {
 	it("in the subject, the html and the text, for one and for the list", async () => {
-		const bodies: unknown[] = [];
+		const bodies: Record<string, string>[] = [];
 		const fetchImpl = (async (_url: unknown, init?: RequestInit) => {
-			bodies.push(JSON.parse(String(init?.body)));
-			return new Response(JSON.stringify({ messageId: "m" }), {
-				status: 201,
-			});
+			const body = JSON.parse(String(init?.body));
+			bodies.push(...(body.messages ?? [body]));
+			const data = body.messages ? [{ id: "m" }] : { id: "m" };
+			return new Response(JSON.stringify({ data }), { status: 202 });
 		}) as unknown as typeof fetch;
 		const mailer = createMailer({
 			apiKey: "k",
@@ -63,20 +63,39 @@ describe("the mailer seals what it sends", () => {
 			html: `<p>${PARAM.name}</p><p>{{ guest }}</p>`,
 			text: `${PARAM.unsubscribeUrl}\n{{ guest }}`,
 		};
-		await mailer.sendOne({ email: "a@x.com" }, rendered);
+		await mailer.sendOne({ email: "a@x.com" }, rendered, {
+			params: { name: "Al", unsubscribeUrl: "u" },
+		});
 		await mailer.sendList(
-			[{ email: "a@x.com", name: null, unsubscribeUrl: "u", linkToken: "t" }],
+			[{ email: "a@x.com", name: "Al", unsubscribeUrl: "u", linkToken: "t" }],
 			rendered,
 		);
 		expect(bodies).toHaveLength(2);
-		for (const body of bodies as Record<string, string>[]) {
+		for (const body of bodies) {
 			expect(body.subject).toBe(`{${ZW}% raw %}`);
-			expect(body.htmlContent).toBe(
-				`<p>${PARAM.name}</p><p>{${ZW}{ guest }}</p>`,
-			);
-			expect(body.textContent).toBe(
-				`${PARAM.unsubscribeUrl}\n{${ZW}{ guest }}`,
-			);
+			expect(body.html_body).toBe(`<p>Al</p><p>{${ZW}{ guest }}</p>`);
+			expect(body.text_body).toBe(`u\n{${ZW}{ guest }}`);
 		}
+	});
+
+	it("does not seal what it fills in", async () => {
+		const bodies: Record<string, string>[] = [];
+		const fetchImpl = (async (_url: unknown, init?: RequestInit) => {
+			bodies.push(JSON.parse(String(init?.body)));
+			return new Response(JSON.stringify({ data: { id: "m" } }), {
+				status: 202,
+			});
+		}) as unknown as typeof fetch;
+		const mailer = createMailer({
+			apiKey: "k",
+			sender: { email: "s@x.com" },
+			fetch: fetchImpl,
+		});
+		await mailer.sendOne(
+			{ email: "a@x.com" },
+			{ subject: "S", html: PARAM.name, text: PARAM.name },
+			{ params: { name: "{{ x }}" } },
+		);
+		expect(bodies[0]?.text_body).toBe("{{ x }}");
 	});
 });

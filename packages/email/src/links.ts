@@ -1,7 +1,7 @@
 /**
  * Links in list emails sign the reader in. Every one of them carries that
- * person's `link_token`, which Brevo substitutes per recipient, so the URL
- * built here is a template until it leaves the building.
+ * person's `link_token`, which the mailer fills in per recipient, so the
+ * URL built here is a template until it leaves the building.
  */
 
 import { PARAM } from "./render";

@@ -1,5 +1,5 @@
-import type { Rendered } from "../brevo";
 import { muted, urlLink } from "../render";
+import type { Rendered } from "../telnyx";
 import { baseFacts, nameList, peopleAre, type RsvpFacts, render } from "./rsvp";
 
 export type RsvpConfirmedInput = RsvpFacts & { permitUrl: string | null };

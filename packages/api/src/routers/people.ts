@@ -11,6 +11,7 @@ import {
 	listPeople,
 	notDeactivated,
 	reactivate,
+	removePhone,
 	rotateLinkToken,
 	suspend,
 	unsuspend,
@@ -127,10 +128,6 @@ export const peopleRouter = {
 				});
 			}
 			await unsuspend(context.db, userId);
-			// They may be on Brevo's blocklist from a webhook drop; without this
-			// they would be "active" and quietly undeliverable. Their address,
-			// not the caller's -- an admin can do this for somebody else.
-			await getMailer().unblock(state.email);
 			return { ok: true };
 		}),
 
@@ -246,7 +243,6 @@ export const peopleRouter = {
 			if (input.groupIds.length > 0) {
 				await setGroupsOf(context.db, userId, input.groupIds);
 			}
-			await getMailer().unblock(email);
 			const outcome = await sendWelcome(context.db, userId, { email, name });
 			return {
 				id: userId,
@@ -320,6 +316,19 @@ export const peopleRouter = {
 		}),
 
 	/**
+	 * Take a number off somebody: a phone that changed hands, say. Admins can
+	 * take a number away but never add one -- texts need the owner's own
+	 * yes, which only the code we text them can give.
+	 */
+	removePhone: adminProcedure
+		.input(z.object({ userId: z.string().min(1) }))
+		.handler(async ({ context, input }) => {
+			await requirePerson(context.db, input.userId);
+			await removePhone(context.db, input.userId);
+			return { ok: true };
+		}),
+
+	/**
 	 * Out of the group: no email of any kind, no way in, every session killed.
 	 * Admin only, and the only thing that sets Better Auth's `banned`, which is
 	 * what closes the password door.
@@ -368,7 +377,7 @@ export const peopleRouter = {
 				!row?.linkSentAt || Date.now() - row.linkSentAt.getTime() > 10 * 60_000;
 			if (row && cooledOff) {
 				// Not awaited. The words are the same for every address, but a
-				// response that waited on Brevo only for the ones on the list
+				// response that waited on Telnyx only for the ones on the list
 				// said in milliseconds what the words would not.
 				waitUntil(
 					sendWelcome(context.db, row.id, {

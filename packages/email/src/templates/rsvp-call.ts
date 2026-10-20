@@ -1,4 +1,4 @@
-import type { Rendered } from "../brevo";
+import type { Rendered } from "../telnyx";
 import { baseFacts, type RsvpFacts, render } from "./rsvp";
 
 export type RsvpCallInput = RsvpFacts & {

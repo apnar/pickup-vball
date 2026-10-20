@@ -1,4 +1,3 @@
-import type { Rendered } from "../brevo";
 import { emailLink } from "../links";
 import {
 	button,
@@ -10,6 +9,7 @@ import {
 	muted,
 	para,
 } from "../render";
+import type { Rendered } from "../telnyx";
 
 export type WaitlistInInput = {
 	gameId: string;

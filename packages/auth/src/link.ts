@@ -16,7 +16,8 @@ type Db = ReturnType<typeof createDb>;
  *
  * Served at `/api/auth/link?k=<token>&to=<path>`. GET, so Better Auth's
  * origin check does not apply. The param is `k`, not `callbackURL`: that
- * name is spoken for.
+ * name is spoken for. `g=<night id>` is short for `to=/rsvp/<id>`: a text
+ * has 306 characters for everything, and the escaped path costs twelve.
  */
 export function emailLink({ db }: { db: Db }) {
 	return {
@@ -29,6 +30,7 @@ export function emailLink({ db }: { db: Db }) {
 					query: z.object({
 						k: z.string().min(1),
 						to: z.string().optional(),
+						g: z.string().optional(),
 					}),
 				},
 				async (ctx) => {
@@ -86,9 +88,10 @@ export function emailLink({ db }: { db: Db }) {
 						user.id,
 					);
 					await setSessionCookie(ctx, { session, user });
-					throw ctx.redirect(
-						new URL(safeReturnPath(ctx.query.to), site).toString(),
-					);
+					const to = ctx.query.g
+						? `/rsvp/${encodeURIComponent(ctx.query.g)}`
+						: ctx.query.to;
+					throw ctx.redirect(new URL(safeReturnPath(to), site).toString());
 				},
 			),
 		},

@@ -86,7 +86,7 @@ function GiveCreditsPage() {
 		orpc.credits.add.mutationOptions({
 			onSuccess: (result) => {
 				toast.success(
-					`Added. ${picked ? firstName(picked.name) : "They"} now ${result.balance === 1 ? "has 1 credit" : `has ${result.balance} credits`}.${result.emailed ? (result.dryRun ? " The receipt is in the server log." : " A receipt is on its way.") : " The receipt email didn't go out."}`,
+					`Added. ${picked ? firstName(picked.name) : "They"} now ${result.balance === 1 ? "has 1 credit" : `has ${result.balance} credits`}.${result.emailed ? (result.dryRun ? " The receipt is in the server log." : " A receipt is on its way.") : " No receipt went out (they may have receipts turned off)."}`,
 				);
 				setNote("");
 				setAmount(10);

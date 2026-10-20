@@ -1,6 +1,6 @@
-import type { Rendered } from "../brevo";
 import { button, escapeHtml, layout, muted, para, urlLink } from "../render";
 import { SITE_NAME } from "../sender";
+import type { Rendered } from "../telnyx";
 
 export type WelcomeInput = { name: string | null; url: string };
 

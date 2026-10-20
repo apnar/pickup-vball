@@ -26,7 +26,7 @@ This project was created with [Better-T-Stack](https://github.com/AmanVarshney01
 - **Drizzle** - TypeScript-first ORM
 - **Cloudflare D1** - SQLite database
 - **Authentication** - Better-Auth
-- **Email** - Brevo transactional API, called with plain `fetch` from `packages/email`
+- **Email and texts** - Telnyx email and messaging APIs, called with plain `fetch` from `packages/email`
 - **Turborepo** - Optimized monorepo build system
 - **Biome** - Linting and formatting
 
@@ -47,14 +47,14 @@ The whole site runs as a single Cloudflare Worker on the free plan:
   - `/api/auth/*` - Better Auth
   - `/api/rpc` - oRPC (the web app calls this from the browser and calls the router directly during SSR)
   - `/api/unsubscribe/:token` - one-click unsubscribe pages for list emails
-  - `/api/brevo/webhook` - Brevo tells the app who unsubscribed, bounced or complained
+  - `/api/telnyx/webhook` - Telnyx tells the app about bounces, complaints, delivery, and the texts people send back
   - `/api/health` - health check
 - A Cron Trigger runs the Worker's `scheduled` handler (`apps/web/src/server.ts`) every half hour. It runs the RSVP cycle: five emails on a fixed clock and the 1 PM verdict on whether a night is on. See "The RSVP cycle" below.
 - The database is Cloudflare D1 (SQLite) accessed through Drizzle via the `DB` binding. Env vars, secrets and bindings come from `cloudflare:workers` (typed in `packages/env/env.d.ts`, which must match `apps/web/wrangler.jsonc`).
 
 ## Local development
 
-1. Create `apps/web/.dev.vars` from `apps/web/.dev.vars.example` and set a random `BETTER_AUTH_SECRET`. `BREVO_API_KEY` is optional: without it every email is printed to the dev server's console instead of sent, which is the normal local setup.
+1. Create `apps/web/.dev.vars` from `apps/web/.dev.vars.example` and set a random `BETTER_AUTH_SECRET`. `TELNYX_API_KEY` is optional: without it every email and text (phone codes included) is printed to the dev server's console instead of sent, which is the normal local setup.
 2. Apply the migrations to the local D1 database (stored under `apps/web/.wrangler/`):
 
 ```bash
@@ -166,50 +166,43 @@ One credit is one night played, and costs $5 (`CREDIT_PRICE` in `packages/api/sr
 - **The ledger** (`/admin/ledger`) shows this month's credits added and used, everybody's entries with the balance each left behind, filters for added / used and a player, and a CSV export of the whole thing (text cells that start with `=`, `+`, `-` or `@` are defused for spreadsheets).
 - **Players** see their own balance and history on `/credits`, which also says how to pay. Nothing there writes, and nothing a player can do moves a credit.
 
-## Email
+## Email and texts
 
-Players hear about games by email, and get in through the links in them. Brevo delivers; the app owns the list, the templates and the log.
+Players hear about nights by email, by text, or both, and get in through the links in them. Telnyx delivers both; the app owns the list, the templates, the choices and the log.
 
 - **Who gets it.** The `user` table — the same rows that decide who is a player, because there is only one list. Admins add people on `/admin/users` (`source = 'admin'`); older rows came from the site form (`site`) and the old public sign-up (`signup`). Each person has an `unsubscribe_token` for the footer link and a `link_token` for the sign-in links, both plain text (they ride in every email anyway) and both stamped by the `user.create` hook, so nobody can exist without a way in.
-- **Which audience.** Game announcements and game-day reminders always go to **active** people only; somebody on a break does not need the reminders. The ad-hoc message on `/admin/email` offers **Active** (default) or **Everyone**, where Everyone also reaches people on a break. Neither audience ever includes anybody deactivated. `email_send.audience` records which was used. The one query behind all of it is `listRecipients` in `packages/db/src/people.ts`.
-- **Stepping away.** The footer of every list email links to `/api/unsubscribe/<token>`, which no longer unsubscribes anybody on sight — it shows a form asking for how long and why, and only the POST acts. (That also fixes a real bug: mail clients prefetch link targets, which used to unsubscribe people who never clicked.) A mail client's own one-click `List-Unsubscribe-Post` sends no form at all, so it lands as an open-ended break. Players can do the same thing from `/dashboard` or straight from the RSVP board, and come back from any of them in one tap.
-- **How a link signs you in.** Every link in a list email points at `/api/auth/link?k=<link_token>&to=<path>`, a GET endpoint added by the `email-link` plugin in `packages/auth/src/link.ts`. It finds the person, marks an unverified address verified, opens a session and redirects to `to` — which is checked by `safeReturnPath` and falls back to `/` for anything that points off this site. An unknown token lands on `/login?error=link`, a deactivated one on `/login?error=revoked`, an admin's with a password set on `/login?error=admin` (see "The one list"). Those checks are written out here rather than left to the admin plugin: this endpoint mints its own session, so it is the thing standing between a revoked player and the gym address. The token is a bearer credential, so **the request log prints paths without query strings** and nothing else may log a URL. If a link does get out -- a forwarded email, a screenshot -- "New link" on `/admin/users` (`people.rotateLink`) kills every link that person was ever sent and emails a fresh one.
-- **Braces in what people type.** Brevo runs its template language over every list email (that is how the per-recipient placeholders get filled), so a guest called `{% if %}` would have the whole send rejected. The mailer runs `sealTemplate` over the finished subject, HTML and text: a zero-width space after any `{` that opens a tag, everywhere except inside our own placeholders. Names also refuse braces at the box.
+- **Which audience.** Cycle messages always go to **active** people only; somebody on a break does not need the reminders. The ad-hoc message on `/admin/email` offers **Active** (default) or **Everyone**, where Everyone also reaches people on a break. Neither audience ever includes anybody deactivated. `email_send.audience` records which was used. The one query behind all of it is `listRecipients` in `packages/db/src/people.ts`.
+- **Which channel.** On `/dashboard` each player picks Off, Email, Text or Both for each kind of message (`TOPICS` in `packages/api/src/notify.ts`: night calls, reminders to answer, night confirmed, on or off, off the waitlist, game-day reminder, a spot opened, low credit, credit receipts, group updates). No row in `notify_pref` means the default (email; the spot alert is off). The three about a night somebody said yes to -- confirmed, the verdict, off the waitlist -- cannot be Off. `channelsFor` turns a choice into channels and falls back rather than to nothing: text with no usable number goes by email, email that bounced goes by text. Sign-in links asked for on `/login`, the welcome and password emails always go by email.
+- **Stepping away.** The footer of every list email links to `/api/unsubscribe/<token>`, which shows a form asking for how long and why; only the POST acts (mail clients prefetch link targets). Every email also carries our own `List-Unsubscribe` and `List-Unsubscribe-Post` headers pointing at the same POST, so a mail app's one-click unsubscribe lands as an open-ended break. Players can do the same thing from `/dashboard` or straight from the RSVP board, and come back from any of them in one tap.
+- **How a link signs you in.** Every link in a list email or text points at `/api/auth/link?k=<link_token>&to=<path>` (texts use `g=<night id>`, short for `to=/rsvp/<id>`), a GET endpoint added by the `email-link` plugin in `packages/auth/src/link.ts`. It finds the person, marks an unverified address verified, opens a session and redirects to `to` — which is checked by `safeReturnPath` and falls back to `/` for anything that points off this site. An unknown token lands on `/login?error=link`, a deactivated one on `/login?error=revoked`, an admin's with a password set on `/login?error=admin` (see "The one list"). The token is a bearer credential, so **the request log prints paths without query strings** and nothing else may log a URL. Click tracking is off on every email (`tracking_settings`), or Telnyx would rewrite each link -- token and all -- through its own domain. If a link does get out, "New link" on `/admin/users` (`people.rotateLink`) kills every link that person was ever sent and emails a fresh one.
+- **Personalisation.** Templates carry `{{ params.key }}`-style placeholders (`PARAM` in `packages/email/src/render.ts`); the mailer fills them in per recipient (`fillParams`) and sends one copy each, up to 1,000 per Telnyx batch request -- a full list is one subrequest. Texts keep the key a placeholder in the outbox and the drain fills it in as each one leaves, so no stored row is a live way in.
+- **Braces in what people type.** The mailer runs `sealTemplate` over the finished subject, HTML and text before filling anything in: a zero-width space after any `{` that opens a tag, except inside our own placeholders. Telnyx documents Liquid only for stored templates, which we never send, so this is insurance -- but the failure it insures against is a guest called `{% if %}` getting a whole cycle send rejected every half hour. Names also refuse braces at the box.
 - **What goes out.**
-  - *Welcome* — when an admin adds someone, or resends their link from `/admin/users`, or a player asks for one from `/login`. Carries their concrete sign-in link, no list footer.
-  - *The five cycle emails* — sent by the Cron Trigger, described in "The RSVP cycle" below. An admin can fire any of them early from `/admin/email`, or resend one to a single person from `/admin/users`.
-  - *Message* — anything an admin types on `/admin/email`. "Send to me first" delivers a test copy to the signed-in admin only, with their own token substituted so the links are real.
-  - *Credits added* — the receipt to one player when an admin adds credits they paid for. See "Credits and check-in" above.
+  - *Welcome* — when an admin adds someone, or resends their link from `/admin/users`, or a player asks for one from `/login`. Carries their concrete sign-in link, no list footer. Email only.
+  - *The five cycle messages* — sent by the Cron Trigger, described in "The RSVP cycle" below. An admin can fire any of them early from `/admin/email`, or resend one to a single person from `/admin/users`.
+  - *Game-day reminder* — a few hours (`REMINDER_LEAD_HOURS`) before a night that is on, to the people in. *A spot opened* — when a full night with nobody waiting has room again, at most hourly. *Low credit* — when closing a night takes somebody from two credits to one. All three in `packages/api/src/jobs/alerts.ts`.
+  - *Message* — anything an admin types on `/admin/email`, with a short "text version" for whoever takes group updates by text (blank means the subject). "Send to me first" delivers a test copy to the signed-in admin only, by text too if they have a number.
+  - *Credits added* — the receipt to one player when an admin adds credits they paid for.
   - *Account* — Better Auth's password reset from `/forgot-password`, and the verification email left over from the sign-up era. These carry no unsubscribe link.
-- **Sender.** "Viroj’s Pickup" <`info@moco-pickup.com`>, set in `packages/email/src/sender.ts` -- a placeholder borrowed from the basketball site until this one gets its own sender. The domain's DNS records are already authenticated in Brevo, so any address on moco-pickup.com can be added as a sender there.
-- **Not switched on yet.** Production has no `BREVO_API_KEY`, so every email is printed to the Worker log instead of sent (Workers Logs in the Cloudflare dashboard, or `pnpm --filter web exec wrangler tail`). That includes the welcome emails with sign-in links, so until email is on, new players have to be let in by hand. Set the key (below) to start sending.
-- **Log.** Every list send writes one `email_send` row (kind, subject, recipient count, failures, Brevo message ids). `/admin/email` shows the last twenty.
-- **Batching and personalisation.** One Brevo request carries up to 99 personalised copies (`messageVersions`), so a full list costs one or two subrequests. Each copy gets `params.name`, `params.unsubscribeUrl` and `params.key` — the last is what turns the shared template's links into that one person's sign-in links. Without `BREVO_API_KEY` the email is printed instead, with those placeholders filled in from the first recipient so the link in the console is clickable.
-- **Brevo's own unsubscribe.** Brevo adds its own `List-Unsubscribe` header to every email (ours is replaced), so a player can also stop the mail from the Unsubscribe button in their mail app. That puts them on Brevo's transactional blocklist, and Brevo tells the app through a webhook at `/api/brevo/webhook` (`apps/web/src/server/brevo-webhook.ts`). All four events — unsubscribe, hard bounce, spam complaint, invalid address — put the person on an **open-ended break**, never a deactivation: not being able to reach somebody is not grounds for throwing them out, and only an admin does that. The reason is written for them ("Email is bouncing.") so the admin page shows it came from Brevo and not from them, and only somebody currently active is touched, so a repeat event cannot clobber a reason they wrote themselves. Every path back — the admin page, the dashboard, the email footer's undo — lifts Brevo's blocklist too, or they would read as active and be quietly undeliverable.
+- **Texts.** Every text is a row in `sms_out` first. A Worker on the free plan gets 50 outside calls a run and each text is one, so the first send in a request drains up to 30 as it finishes (`kickDrain`) and a once-a-minute cron drains 40 a run (`packages/api/src/jobs/sms-drain.ts`). The drain re-checks each person as it goes: a number removed, a STOP, a deactivation or a night already started turns the text into `skipped`. List texts queued between 9 PM and 8 AM ET wait for the morning (`textSendAfter`); codes and replies to somebody's own text go at once. Each template has a text sibling in `packages/email/src/texts.ts`, tested to fit two GSM-7 segments, and `toGsm` takes curly quotes and the like out on the way, since one would send the whole text as UCS-2 at three times the price.
+- **Phone numbers.** A player adds one on `/dashboard`: they tick the consent box (wording in `TEXTS.consent`, `apps/web/src/content/run.ts`), we text a 6-digit code, they type it back. Only an HMAC of the code is stored (`phone_check`); it lasts 10 minutes, five wrong tries kill it, and a number gets at most one code a minute and five a day. `user.phone` only ever holds a verified number, unique across the group, so a reply means one person. Admins can remove a number but never add one. US numbers only.
+- **Replies.** Replying IN, OUT or MAYBE (or yes/no/y/n) answers for the newest night we texted that person about that is still open (`pickNight` in `packages/api/src/sms-parse.ts`), through the same `recordAnswer` the site uses (`packages/api/src/answer.ts`). The whole message must be the answer -- "No problem, I'm in" is not a NO. The reply names the night and links to it. A night already decided says so and changes nothing, like the site. Anything else gets one explanation an hour; a number nobody verified gets nothing. STOP/START are answered by Telnyx and mirrored in `user.sms_opted_out_at`, so their texts go by email meanwhile. `sms_in` keys every inbound text by Telnyx's id, so a redelivered webhook is acted on once.
+- **Bounces.** Telnyx reports to `/api/telnyx/webhook` (`apps/web/src/server/telnyx-webhook.ts`, Ed25519-signed; without `TELNYX_PUBLIC_KEY` the route answers 404). A hard bounce (code 30001) or spam complaint sets `user.email_blocked_at`: somebody with a usable number keeps getting everything by text, somebody without is put on an **open-ended break**, as before -- never a deactivation. Coming back from a break, or "Try email again" on `/dashboard`, clears it. Telnyx keeps its own suppression list for those addresses; there is no API call to lift it from here.
+- **Sender.** "Viroj’s Pickup" <`info@moco-pickup.com`>, set in `packages/email/src/sender.ts`. Any address on a domain verified in Telnyx works.
+- **Not switched on yet.** Production has no `TELNYX_API_KEY`, so every email and text is printed to the Worker log instead of sent (Workers Logs, or `pnpm --filter web exec wrangler tail`). That includes the welcome emails with sign-in links, so until email is on, new players have to be let in by hand.
+- **Log.** Every list send writes one `email_send` row (kind, subject, how many emailed, how many texted, failures, Telnyx message ids). `/admin/email` shows the last twenty and how many texts are waiting.
 
 Setting it up:
 
-1. In Brevo, create a v3 API key (Account > SMTP & API > API keys).
-2. Production: `pnpm --filter web exec wrangler secret put BREVO_API_KEY`.
-3. Local sending (optional): put the same key in `apps/web/.dev.vars`.
-4. The webhook: pick a random token, set it with `pnpm --filter web exec wrangler secret put BREVO_WEBHOOK_SECRET`, then register the webhook once (already done for the production account):
+1. In the Telnyx portal, create an API key (Keys & Credentials > API Keys) and copy the account's public key (Keys & Credentials > Public Key).
+2. Email: add `moco-pickup.com` as an email domain and publish the records it gives you in Cloudflare DNS (ownership TXT, DKIM at `telnyx1._domainkey`, and `include:spf.telnyx.com` in the SPF record), then verify it. **Turn off unsubscribe tracking, open tracking and click tracking** on the domain -- we send our own unsubscribe headers, and click tracking would route sign-in tokens through Telnyx. A new domain is warmed up over its first week (250 recipients on day one), shared with the basketball site.
+3. Add a domain webhook to `https://vball.moco-pickup.com/api/telnyx/webhook` for `email.bounced`, `email.complained` and `email.unsubscribed`.
+4. Texts: buy a local number, put it on a messaging profile whose webhook is the same URL, with opt-out handling and a HELP reply on. Register the number for 10DLC as a sole proprietor (one number; usually approved in days): the campaign description and sample messages can come from `/sms`, and the opt-in is the dashboard's consent box -- reviewers will want a screenshot of it, and `/sms` and `/privacy` are public for them. Then set `TELNYX_FROM_NUMBER` (E.164) and `TELNYX_MESSAGING_PROFILE_ID` in `apps/web/wrangler.jsonc` `vars`.
+5. Production: `pnpm --filter web exec wrangler secret put TELNYX_API_KEY` and `... TELNYX_PUBLIC_KEY`.
+6. Rate limiting. Better Auth's limiter keeps its counts in D1 (`rate_limit`, in migration 0000) keyed by `cf-connecting-ip`, so the password door, the reset form and the link endpoint are actually limited across the edge. The one public oRPC call, `people.requestLink`, has only its per-address ten-minute cooldown; put a **Cloudflare WAF rate-limiting rule** in front of it and the auth routes (zone > Security > WAF > Rate limiting rules): something like 20 requests per minute per IP on `/api/auth/*` and 5 per minute on `/api/rpc/people/requestLink`. The rule lives in the dashboard, not in this repo.
+7. To exercise things locally with the dev server running: `curl "http://localhost:3001/cdn-cgi/local/scheduled?cron=0+*+*+*+*"` runs the cycle and the reminders, `?cron=*+*+*+*+*` drains the text outbox. **Leave `TELNYX_API_KEY` unset while you do**, or the job emails and texts everybody in the local database for real. To try the webhook, put a test Ed25519 public key in `.dev.vars` as `TELNYX_PUBLIC_KEY` and sign requests with its private half (`${timestamp}|${body}`, headers `telnyx-signature-ed25519` and `telnyx-timestamp`).
 
-   ```bash
-   curl -H "api-key: $BREVO_API_KEY" -H "content-type: application/json" https://api.brevo.com/v3/webhooks \
-     -d '{"url":"https://vball.moco-pickup.com/api/brevo/webhook","type":"transactional","events":["unsubscribed","hardBounce","spam","invalid"],"auth":{"type":"bearer","token":"<the token>"}}'
-   ```
-
-   Without the secret the route answers 404, so a missing webhook never breaks anything else.
-5. Rate limiting. Better Auth's limiter keeps its counts in D1 (`rate_limit`, in migration 0000) keyed by `cf-connecting-ip`, so the password door, the reset form and the link endpoint are actually limited across the edge. The one public oRPC call, `people.requestLink`, has only its per-address ten-minute cooldown; put a **Cloudflare WAF rate-limiting rule** in front of it and the auth routes (zone > Security > WAF > Rate limiting rules): something like 20 requests per minute per IP on `/api/auth/*` and 5 per minute on `/api/rpc/people/requestLink`. The rule lives in the dashboard, not in this repo.
-6. To exercise the cycle locally with the dev server running: `curl "http://localhost:3001/cdn-cgi/local/scheduled?cron=0+*+*+*+*"`. **Leave `BREVO_API_KEY` unset while you do**, or the job mails everybody in the local database for real.
-
-The templates and Brevo client in `packages/email` are pure functions with tests: `pnpm run test`.
-
-Brevo also offers an MCP server for inspecting the account (senders, templates, delivery logs) from Claude Code. Register it once per machine, outside the repo, with an MCP token from the same API keys page:
-
-```bash
-claude mcp add --transport http --scope user brevo https://mcp.brevo.com/v1/brevo/mcp --header "Authorization: Bearer <MCP token>"
-```
+The templates, the Telnyx clients, the signature check and the text rules are pure functions with tests: `pnpm run test`.
 
 ## The RSVP cycle
 
@@ -294,12 +287,18 @@ the group uses it:
 
 - [ ] The first admin (Josh, bootstrapped by SQL) **sets a password** on
       `/dashboard`. That also retires his sign-in link, which has been shared.
-- [ ] **Turn on email.** Add a sender in Brevo (the domain is already
-      authenticated), change `SENDER` in `packages/email/src/sender.ts`, then
-      `pnpm --filter web exec wrangler secret put BREVO_API_KEY`. Until then
-      every email -- welcome links included -- goes only to the Worker log.
-- [ ] **Register the Brevo webhook** for this host (see "Email", step 4, with
-      `vball.moco-pickup.com`) and set `BREVO_WEBHOOK_SECRET`.
+- [ ] **Turn on email and texts.** Telnyx account, `moco-pickup.com`
+      verified with tracking off, the domain webhook, a number on a messaging
+      profile, `TELNYX_FROM_NUMBER` / `TELNYX_MESSAGING_PROFILE_ID` in
+      `wrangler.jsonc`, then `wrangler secret put TELNYX_API_KEY` and
+      `TELNYX_PUBLIC_KEY` (see "Email and texts", steps 1-5). Until then
+      every email and text -- welcome links included -- goes only to the
+      Worker log.
+- [ ] **Register the number for 10DLC** (sole proprietor), using `/sms`,
+      `/privacy` and a screenshot of the consent box on `/dashboard`. Texts
+      are refused by the carriers until it is approved.
+- [ ] Once it is live, verify your own phone and reply STOP, then START, to
+      check the opt-out mirror before players add numbers.
 - [ ] **Add Viroj** on `/admin/users` and make him an admin; he should set a
       password too. Then add the players.
 - [ ] Book the gyms (`/admin/gyms`) and the first nights (`/admin`).
@@ -325,8 +324,7 @@ place of the spec's skill levels (see "Groups"); the rest, in rough order:
   after the 1 PM verdict.
 - **In/out only**, if the group wants to drop "maybe".
 
-Also from the spec but not built: the low-credit alert and the other
-notification switches on the Profile mockup, admin-only notes on a player,
+Also from the spec but not built: admin-only notes on a player,
 and a setting to block RSVPs at zero credits (the group chose to allow
 negative balances for now).
 
@@ -334,7 +332,8 @@ Answered so far: balances may go negative; walk-ins are people in the group,
 and guests without accounts are settled off the site; full nights have a
 waitlist that moves people in automatically. Still open, to answer before the
 matching piece is built: late-drop policy, whether
-players see their own level, SMS, extra reverse-coed rules. Mockups with no
+players see their own level, extra reverse-coed rules. (Texts are built:
+see "Email and texts".) Mockups with no
 counterpart yet: the skill-level and format parts of `A-Sessions`,
 `A-Session`, `A-Admin`, `A-NewSession` and `A-PlayerDetail`.
 
@@ -353,7 +352,7 @@ One-time setup:
 1. Log in: `pnpm --filter web exec wrangler login`.
 2. Create the database: `pnpm --filter web exec wrangler d1 create pickup-vball-db` and paste the returned id into `database_id` in `apps/web/wrangler.jsonc`.
 3. Set the auth secret: `pnpm --filter web exec wrangler secret put BETTER_AUTH_SECRET`.
-   Set the Brevo key and webhook token the same way: `pnpm --filter web exec wrangler secret put BREVO_API_KEY` and `... put BREVO_WEBHOOK_SECRET` (see "Email").
+   Set the Telnyx keys the same way: `pnpm --filter web exec wrangler secret put TELNYX_API_KEY` and `... put TELNYX_PUBLIC_KEY` (see "Email and texts").
 4. Create the permit bucket: `pnpm --filter web exec wrangler r2 bucket create pickup-vball-permits`.
 5. Apply migrations to production: `pnpm run db:migrate:remote`.
 6. Deploy: `pnpm run deploy`.
@@ -379,7 +378,7 @@ pickup-vball/
 │   ├── api/         # oRPC router / business logic
 │   ├── auth/        # Better Auth configuration
 │   ├── db/          # Drizzle schema (auth/people, gym, game, permit, rsvp, credit_entry, check_in, email_send) and D1 migrations
-│   ├── email/       # Brevo client, email templates and their tests
+│   ├── email/       # Telnyx clients, email and text templates and their tests
 │   └── env/         # Typed access to Worker env and bindings
 ```
 
@@ -389,7 +388,7 @@ pickup-vball/
 - `pnpm run build`: Build the Worker and static assets
 - `pnpm run check-types`: Check TypeScript types across the workspace
 - `pnpm run check`: Run Biome formatting and linting
-- `pnpm run test`: Run the unit tests (email templates, Brevo client, the cycle's timezone and stage maths)
+- `pnpm run test`: Run the unit tests (email and text templates, Telnyx clients, the cycle's timezone and stage maths, the text rules)
 - `pnpm run db:generate`: Generate a D1 migration from the Drizzle schema
 - `pnpm run db:migrate:local`: Apply migrations to the local D1 database
 - `pnpm run db:migrate:remote`: Apply migrations to the production D1 database

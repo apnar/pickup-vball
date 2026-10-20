@@ -1,7 +1,9 @@
 import { ORPCError } from "@orpc/server";
+import { outboxCounts } from "@pickup-vball/db/notify";
 import { EMAIL_AUDIENCES, emailSend } from "@pickup-vball/db/schema/email";
 import { game } from "@pickup-vball/db/schema/game";
-import { getMailer } from "@pickup-vball/email/worker";
+import { fillParams } from "@pickup-vball/email";
+import { getMailer, getTexter } from "@pickup-vball/email/worker";
 import { asc, desc, eq, gte } from "drizzle-orm";
 import { z } from "zod";
 
@@ -17,6 +19,7 @@ import {
 	readSplit,
 	recipientCounts,
 	renderMessage,
+	renderMessageText,
 	sendToList,
 	tokensFor,
 } from "../mail";
@@ -37,6 +40,11 @@ const messageSchema = z.object({
 	 * deactivated. The cycle emails never offer the choice.
 	 */
 	audience: z.enum(EMAIL_AUDIENCES).default("active"),
+	/**
+	 * The text-message version, for whoever chose texts for group updates.
+	 * Short: a text is read on a lock screen. Blank means the subject.
+	 */
+	text: z.string().trim().max(300).optional(),
 });
 
 async function requireGame(db: Context["db"], id: string) {
@@ -56,9 +64,11 @@ function nobody(): never {
 }
 
 export const mailRouter = {
-	/** Whether emails actually leave the building (BREVO_API_KEY is set). */
+	/** Whether emails actually leave the building (TELNYX_API_KEY is set). */
 	status: adminProcedure.handler(async ({ context }) => ({
 		dryRun: getMailer().dryRun,
+		textsDryRun: getTexter().dryRun,
+		outbox: await outboxCounts(context.db, new Date()),
 		counts: await recipientCounts(context.db),
 	})),
 
@@ -71,7 +81,7 @@ export const mailRouter = {
 		.handler(async ({ context, input }) => {
 			const found = await requireGame(context.db, input.gameId);
 			const split = await readSplit(context.db, found.id);
-			const { rendered, audience } = renderStage({
+			const { rendered, text, audience } = renderStage({
 				stage: input.stage,
 				game: found,
 				split,
@@ -80,6 +90,7 @@ export const mailRouter = {
 			});
 			return {
 				...rendered,
+				textMessage: text,
 				stage: input.stage,
 				recipientCount: audience.length,
 			};
@@ -103,7 +114,7 @@ export const mailRouter = {
 		.handler(async ({ context, input }) => {
 			const found = await requireGame(context.db, input.gameId);
 			const split = await readSplit(context.db, found.id);
-			const { rendered, audience } = renderStage({
+			const { rendered, text, audience } = renderStage({
 				stage: input.stage,
 				game: found,
 				split,
@@ -114,11 +125,12 @@ export const mailRouter = {
 				kind: STAGES.find((x) => x.key === input.stage)?.kind ?? "message",
 				gameId: found.id,
 				rendered,
+				text,
 				sentBy: context.session.user.id,
 				onlyPersonIds: input.personIds ?? audience,
 			});
 			if (!result) nobody();
-			if (!input.personIds && result.sent > 0) {
+			if (!input.personIds && result.sent + result.texted > 0) {
 				// A real send by hand still counts as one for the spacing rule.
 				await context.db
 					.update(game)
@@ -205,7 +217,7 @@ export const mailRouter = {
 				})
 				.where(eq(game.id, found.id));
 
-			const { rendered } = renderStage({
+			const { rendered, text } = renderStage({
 				stage: "final",
 				game: {
 					...found,
@@ -220,6 +232,7 @@ export const mailRouter = {
 				kind: "rsvp_final",
 				gameId: found.id,
 				rendered,
+				text,
 				sentBy: context.session.user.id,
 				onlyPersonIds:
 					input.decision === "on"
@@ -236,6 +249,7 @@ export const mailRouter = {
 				result ?? {
 					attempted: 0,
 					sent: 0,
+					texted: 0,
 					failed: [],
 					messageIds: [],
 					sendId: null,
@@ -247,6 +261,7 @@ export const mailRouter = {
 		.input(messageSchema)
 		.handler(async ({ context, input }) => ({
 			...renderMessage(input),
+			textMessage: renderMessageText(input),
 			recipientCount: await countRecipients(context.db, input.audience),
 		})),
 
@@ -274,9 +289,20 @@ export const mailRouter = {
 						message: `The email could not be sent: ${outcome.error}`,
 					});
 				}
+				// And the text, when the admin can get texts: the version they
+				// wrote is the one most likely to need a second look.
+				let texted = 0;
+				if (context.person.phone && !context.person.smsOptedOut) {
+					const sms = await getTexter().send(
+						context.person.phone,
+						fillParams(renderMessageText(input), { key }),
+					);
+					texted = sms.ok ? 1 : 0;
+				}
 				return {
 					attempted: 1,
 					sent: 1,
+					texted,
 					failed: [],
 					messageIds: [outcome.messageId],
 					sendId: null,
@@ -285,6 +311,7 @@ export const mailRouter = {
 			const result = await sendToList(context.db, {
 				kind: "message",
 				rendered,
+				text: renderMessageText(input),
 				sentBy: context.session.user.id,
 				audience: input.audience,
 			});

@@ -20,7 +20,7 @@ import { recordInvites } from "../invites";
 import { type ListSendResult, permitUrl, readSplit, sendToList } from "../mail";
 import { addDays, todayInRunTimezone } from "../run";
 import { planStage, type Stamps } from "./plan";
-import { renderStage } from "./stage-render";
+import { renderStage, type StageRender } from "./stage-render";
 
 type Db = Context["db"];
 
@@ -28,6 +28,8 @@ export type StageOutcome = {
 	gameId: string;
 	stage: StageKey;
 	sent: number;
+	/** Queued a text instead of (or as well as) an email. */
+	texted?: number;
 	failed: number;
 	/** Resolved without emailing: the condition was not met, or R0. */
 	quiet?: string;
@@ -137,16 +139,22 @@ export async function confirmIfReady(
 		return null;
 	}
 
-	const { rendered, audience } = renderStage({
+	const { rendered, text, audience } = renderStage({
 		stage: "confirmed",
 		game: summary,
 		split,
 		permitUrl: permitUrl(summary),
 		now,
 	});
-	return finish(db, gameId, "confirmed", rendered, {
-		onlyPersonIds: audience,
-	});
+	return finish(
+		db,
+		gameId,
+		"confirmed",
+		{ rendered, text },
+		{
+			onlyPersonIds: audience,
+		},
+	);
 }
 
 /** Send, record, and hand back the outcome. Releases the lock on a throw. */
@@ -154,7 +162,7 @@ async function finish(
 	db: Db,
 	gameId: string,
 	stage: StageKey,
-	rendered: { subject: string; html: string; text: string },
+	out: Pick<StageRender, "rendered" | "text">,
 	opts: { onlyPersonIds?: string[] },
 ): Promise<StageOutcome> {
 	let result: ListSendResult | null;
@@ -162,7 +170,8 @@ async function finish(
 		result = await sendToList(db, {
 			kind: STAGE[stage].kind,
 			gameId,
-			rendered,
+			rendered: out.rendered,
+			text: out.text,
 			audience: "active",
 			onlyPersonIds: opts.onlyPersonIds,
 		});
@@ -175,12 +184,15 @@ async function finish(
 	if (!result) {
 		return { gameId, stage, sent: 0, failed: 0, quiet: "Nobody to tell." };
 	}
-	// Every batch rejected: give it back and try on the next pass.
-	if (result.sent === 0) await release(db, gameId, stage);
+	// Every batch rejected and nobody texted: give it back and try on the
+	// next pass. A queued text counts as reached -- taking the stage back
+	// then would text them twice.
+	if (result.sent + result.texted === 0) await release(db, gameId, stage);
 	return {
 		gameId,
 		stage,
 		sent: result.sent,
+		texted: result.texted,
 		failed: result.attempted - result.sent,
 	};
 }
@@ -223,7 +235,7 @@ async function runStage(
 					: "Already on and still on.",
 			};
 		}
-		const { rendered, audience } = renderStage({
+		const { rendered, text, audience } = renderStage({
 			stage: "final",
 			game: summary,
 			split,
@@ -231,9 +243,15 @@ async function runStage(
 			now,
 			force: on ? "on" : "off",
 		});
-		return finish(db, summary.id, "final", rendered, {
-			onlyPersonIds: audience,
-		});
+		return finish(
+			db,
+			summary.id,
+			"final",
+			{ rendered, text },
+			{
+				onlyPersonIds: audience,
+			},
+		);
 	}
 
 	if (silent) {
@@ -269,16 +287,22 @@ async function runStage(
 		// who was away -- `user` keeps one status and no history -- and the
 		// response rates on /admin/users are counted against it.
 		await recordInvites(db, summary.id, now);
-		const { rendered } = renderStage({
+		const { rendered, text } = renderStage({
 			stage: "call",
 			game: summary,
 			split,
 			permitUrl: permitUrl(summary),
 			now,
 		});
-		return finish(db, summary.id, "call", rendered, {
-			onlyPersonIds: split.askedIds,
-		});
+		return finish(
+			db,
+			summary.id,
+			"call",
+			{ rendered, text },
+			{
+				onlyPersonIds: split.askedIds,
+			},
+		);
 	}
 
 	if (stage === "nudge") {
@@ -295,16 +319,22 @@ async function runStage(
 		if (!(await claim(db, summary.id, stage, now, { sending: true }))) {
 			return null;
 		}
-		const { rendered } = renderStage({
+		const { rendered, text } = renderStage({
 			stage: "nudge",
 			game: summary,
 			split,
 			permitUrl: null,
 			now,
 		});
-		return finish(db, summary.id, stage, rendered, {
-			onlyPersonIds: split.silentIds,
-		});
+		return finish(
+			db,
+			summary.id,
+			stage,
+			{ rendered, text },
+			{
+				onlyPersonIds: split.silentIds,
+			},
+		);
 	}
 
 	// lastCall
@@ -321,14 +351,20 @@ async function runStage(
 	}
 	if (!(await claim(db, summary.id, stage, now, { sending: true })))
 		return null;
-	const { rendered } = renderStage({
+	const { rendered, text } = renderStage({
 		stage: "lastCall",
 		game: summary,
 		split,
 		permitUrl: null,
 		now,
 	});
-	return finish(db, summary.id, stage, rendered, { onlyPersonIds: audience });
+	return finish(
+		db,
+		summary.id,
+		stage,
+		{ rendered, text },
+		{ onlyPersonIds: audience },
+	);
 }
 
 /**
@@ -370,7 +406,7 @@ export async function runRsvpCycle(
 
 	const acted: StageOutcome[] = [];
 	// Serially: two games in one window is already a pathology, and this keeps
-	// two Brevo blasts from interleaving in the log.
+	// two list sends from interleaving in the log.
 	for (const row of rows) {
 		const plan = planStage({
 			date: row.date,

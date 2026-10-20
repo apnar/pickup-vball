@@ -99,6 +99,13 @@ export const game = sqliteTable(
 		 * must not push the next one an hour and a half out.
 		 */
 		lastEmailAt: integer("last_email_at", { mode: "timestamp_ms" }),
+		/** The game-day reminder went to the people in. Claimed like a stage. */
+		reminderAt: integer("reminder_at", { mode: "timestamp_ms" }),
+		/**
+		 * When the group was last told a spot opened, so somebody flipping
+		 * in and out does not text everybody each time.
+		 */
+		spotOpenAt: integer("spot_open_at", { mode: "timestamp_ms" }),
 
 		/**
 		 * When an admin closed the night at the gym, which is when everybody

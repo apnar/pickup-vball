@@ -47,7 +47,7 @@ export const gameInvite = sqliteTable(
 	},
 	(table) => [
 		// The stage claim already makes one snapshot per game, but a send that
-		// Brevo rejects outright gives the stage back and the next pass writes
+		// Telnyx rejects outright gives the stage back and the next pass writes
 		// this again; the insert leans on this index to stay idempotent.
 		uniqueIndex("game_invite_game_user_uidx").on(table.gameId, table.userId),
 		index("game_invite_user_idx").on(table.userId),

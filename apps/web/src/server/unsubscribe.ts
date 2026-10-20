@@ -5,7 +5,6 @@ import {
 	unsuspend,
 } from "@pickup-vball/db/people";
 import { escapeHtml } from "@pickup-vball/email";
-import { getMailer } from "@pickup-vball/email/worker";
 import { Hono } from "hono";
 
 import { SITE_NAME } from "@/content/run";
@@ -217,9 +216,6 @@ unsubscribe.post("/:token/back", async (c) => {
 		return c.text("This link is no longer valid.", 404);
 	}
 	await unsuspend(db, person.id);
-	// Brevo may have them blocklisted from a bounce or a mail-app unsubscribe;
-	// without this they would read as active and be quietly undeliverable.
-	await getMailer().unblock(person.email);
 	return html(
 		page({
 			heading: "Welcome back.",

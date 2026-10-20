@@ -29,6 +29,19 @@ export const PLAY_AT = 8;
  */
 export const STAGE_COOLDOWN_MINUTES = 90;
 
+/**
+ * The game-day reminder goes this long before a night that is on, to the
+ * people who are in. Not a stage: it asks nothing, and the answers are
+ * closed by the time it goes.
+ */
+export const REMINDER_LEAD_HOURS = 3;
+
+/**
+ * At most one "a spot opened" per night in this long, so somebody flipping
+ * in and out does not message everybody each time.
+ */
+export const SPOT_OPEN_COOLDOWN_MINUTES = 60;
+
 export type StageKey = "call" | "nudge" | "confirmed" | "lastCall" | "final";
 
 /** The `game` column that records a stage as resolved. */

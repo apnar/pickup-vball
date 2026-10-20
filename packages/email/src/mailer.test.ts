@@ -54,77 +54,122 @@ describe("createMailer", () => {
 		expect(String(log.mock.calls[0]?.[0])).toContain("link?k=solo");
 	});
 
-	it("batches 100 recipients into calls of 99 and 1 with per-recipient params", async () => {
+	it("sends one batch with a filled-in copy per recipient", async () => {
 		const fetchImpl = vi.fn(
 			async () =>
-				new Response(JSON.stringify({ messageId: "m" }), { status: 201 }),
+				new Response(
+					JSON.stringify({
+						data: [{ id: "m0" }, { id: "m1" }, { id: "m2" }],
+						errors: [],
+					}),
+					{ status: 207 },
+				),
 		);
 		const mailer = createMailer({ apiKey: "k", sender, fetch: fetchImpl });
-		const result = await mailer.sendList(recipients(100), rendered, {
-			tags: ["announcement"],
+		const withKey = {
+			subject: "S",
+			html: '<p>{{ params.name }}</p><a href="x?k={{ params.key }}">in</a>',
+			text: "x?k={{ params.key }} {{ params.unsubscribeUrl }}",
+		};
+		const result = await mailer.sendList(recipients(3), withKey, {
+			tags: ["rsvp_call"],
 		});
-		expect(fetchImpl).toHaveBeenCalledTimes(2);
-		const bodies = fetchImpl.mock.calls.map((c) =>
-			JSON.parse((c as unknown as [string, RequestInit])[1].body as string),
-		);
-		expect(bodies[0].messageVersions).toHaveLength(99);
-		expect(bodies[1].messageVersions).toHaveLength(1);
-		expect(bodies[0].messageVersions[1]).toEqual({
-			to: [{ email: "p1@example.com", name: "Player 1" }],
-			params: {
-				name: "Player 1",
-				unsubscribeUrl: "https://vball.moco-pickup.com/api/unsubscribe/t1",
-				key: "k1",
-			},
-		});
-		expect(bodies[0].headers).toBeUndefined();
-		expect(bodies[0].tags).toEqual(["announcement"]);
-		expect(result).toEqual({
-			attempted: 100,
-			sent: 100,
-			failed: [],
-			messageIds: ["m", "m"],
-		});
-	});
-
-	it("reports a failed batch without losing the others", async () => {
-		const fetchImpl = vi
-			.fn()
-			.mockResolvedValueOnce(
-				new Response(JSON.stringify({ messageId: "ok" }), { status: 201 }),
-			)
-			.mockResolvedValueOnce(new Response("nope", { status: 400 }));
-		const mailer = createMailer({ apiKey: "k", sender, fetch: fetchImpl });
-		const result = await mailer.sendList(recipients(100), rendered);
-		expect(result.sent).toBe(99);
-		expect(result.failed).toEqual([
-			{ emails: ["p99@example.com"], error: "400: nope" },
-		]);
-	});
-
-	it("unblocks through Brevo and treats 404 as success", async () => {
-		const fetchImpl = vi
-			.fn()
-			.mockResolvedValueOnce(new Response(null, { status: 204 }))
-			.mockResolvedValueOnce(new Response("{}", { status: 404 }))
-			.mockResolvedValueOnce(new Response("{}", { status: 500 }));
-		const mailer = createMailer({
-			apiKey: "k",
-			sender,
-			fetch: fetchImpl,
-			log: vi.fn(),
-		});
-		expect(await mailer.unblock("a+b@example.com")).toBe(true);
-		expect(await mailer.unblock("a+b@example.com")).toBe(true);
-		expect(await mailer.unblock("a+b@example.com")).toBe(false);
-		const [url, init] = fetchImpl.mock.calls[0] as unknown as [
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
+		const [, init] = fetchImpl.mock.calls[0] as unknown as [
 			string,
 			RequestInit,
 		];
-		expect(url).toBe(
-			"https://api.brevo.com/v3/smtp/blockedContacts/a%2Bb%40example.com",
+		const { messages } = JSON.parse(init.body as string);
+		expect(messages).toHaveLength(3);
+		expect(messages[1]).toMatchObject({
+			to: [{ email: "p1@example.com", name: "Player 1" }],
+			html_body: '<p>Player 1</p><a href="x?k=k1">in</a>',
+			text_body: "x?k=k1 https://vball.moco-pickup.com/api/unsubscribe/t1",
+			headers: {
+				"List-Unsubscribe":
+					"<https://vball.moco-pickup.com/api/unsubscribe/t1>",
+				"List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+			},
+			tags: ["rsvp_call"],
+		});
+		// Nobody's copy carries anybody else's key.
+		expect(messages[0].text_body).toContain("k=k0 ");
+		expect(messages[2].text_body).toContain("k=k2 ");
+		expect(result).toEqual({
+			attempted: 3,
+			sent: 3,
+			failed: [],
+			messageIds: ["m0", "m1", "m2"],
+		});
+	});
+
+	it("splits more than a thousand recipients across requests", async () => {
+		const fetchImpl = vi.fn(
+			async () =>
+				new Response(JSON.stringify({ data: [], errors: [] }), {
+					status: 207,
+				}),
 		);
-		expect(init.method).toBe("DELETE");
+		const mailer = createMailer({ apiKey: "k", sender, fetch: fetchImpl });
+		await mailer.sendList(recipients(1001), rendered);
+		expect(fetchImpl).toHaveBeenCalledTimes(2);
+	});
+
+	it("escapes a name filled into the HTML part", async () => {
+		const fetchImpl = vi.fn(
+			async () =>
+				new Response(JSON.stringify({ data: [{ id: "m" }] }), {
+					status: 207,
+				}),
+		);
+		const mailer = createMailer({ apiKey: "k", sender, fetch: fetchImpl });
+		await mailer.sendList(
+			[
+				{
+					email: "a@example.com",
+					name: "<b>A</b>",
+					unsubscribeUrl: "u",
+					linkToken: "t",
+				},
+			],
+			rendered,
+		);
+		const [, init] = fetchImpl.mock.calls[0] as unknown as [
+			string,
+			RequestInit,
+		];
+		expect(JSON.parse(init.body as string).messages[0].html_body).toBe(
+			"<p>&lt;b&gt;A&lt;/b&gt;</p>",
+		);
+	});
+
+	it("reports the copies Telnyx refused without losing the others", async () => {
+		const fetchImpl = vi.fn(
+			async () =>
+				new Response(
+					JSON.stringify({
+						data: [{ id: "m0" }],
+						errors: [{ index: 1, code: "recipient_suppressed" }],
+					}),
+					{ status: 207 },
+				),
+		);
+		const mailer = createMailer({ apiKey: "k", sender, fetch: fetchImpl });
+		const result = await mailer.sendList(recipients(2), rendered);
+		expect(result.sent).toBe(1);
+		expect(result.failed).toEqual([
+			{ emails: ["p1@example.com"], error: "recipient_suppressed" },
+		]);
+	});
+
+	it("counts the whole batch as failed when the request is refused", async () => {
+		const fetchImpl = vi.fn(async () => new Response("nope", { status: 400 }));
+		const mailer = createMailer({ apiKey: "k", sender, fetch: fetchImpl });
+		const result = await mailer.sendList(recipients(2), rendered);
+		expect(result.sent).toBe(0);
+		expect(result.failed).toEqual([
+			{ emails: ["p0@example.com", "p1@example.com"], error: "400: nope" },
+		]);
 	});
 
 	it("sends nothing for an empty list", async () => {

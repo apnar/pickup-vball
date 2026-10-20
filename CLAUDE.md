@@ -12,9 +12,9 @@ and kept in full in `docs/handoff/` -- gitignored, local only. The README's
 before starting work.
 
 Production state worth knowing before you test anything: there is no
-`BREVO_API_KEY` in production until "Launch status" says otherwise, so mail
-goes to the Worker log. CI does deploy: every push to `main` applies
-pending D1 migrations to production and deploys the Worker, so a migration
+`TELNYX_API_KEY` in production until "Launch status" says otherwise, so
+email and texts go to the Worker log. CI does deploy: every push to `main`
+applies pending D1 migrations to production and deploys the Worker, so a migration
 that is pushed is a migration that runs.
 
 ## Commands
@@ -44,9 +44,10 @@ pnpm --filter @pickup-vball/db exec vitest run -t "effectiveStatus"
 ```
 
 Only `packages/db`, `packages/email` and `packages/api` have tests — pure
-functions (templates, Brevo request shaping, link paths, status arithmetic,
-the RSVP cycle's timezone and stage maths). Nothing in the test run touches D1
-or the network. `packages/api` has no `check-types` script: adding one surfaces
+functions (templates and their text siblings, Telnyx request shaping, the
+webhook signature, link paths, status arithmetic, the RSVP cycle's timezone
+and stage maths, channel choice, quiet hours, phone codes, reply parsing).
+Nothing in the test run touches D1 or the network. `packages/api` has no `check-types` script: adding one surfaces
 a pre-existing `File`/`Blob` mismatch in `routers/permits.ts` under the Workers
 lib. The `apps/web` build typechecks that source anyway.
 
@@ -66,9 +67,10 @@ curl "http://localhost:3001/cdn-cgi/local/scheduled?cron=0+*+*+*+*"
 ```
 
 Local setup needs `apps/web/.dev.vars` (copy `.dev.vars.example`, set a random
-`BETTER_AUTH_SECRET`). Leave `BREVO_API_KEY` unset locally: the mailer then prints
+`BETTER_AUTH_SECRET`). Leave `TELNYX_API_KEY` unset locally: the mailer then prints
 each email to the dev console with the placeholders filled in from the first
-recipient, so the sign-in link in the log is clickable. If it *is* set,
+recipient, so the sign-in link in the log is clickable, and the texter prints
+each text (phone codes included). If it *is* set,
 strip it and restart before exercising any send; check that `mail.status`
 reports `dryRun: true` first. A local "test" send is otherwise a real one to
 everybody in the local database.
@@ -91,8 +93,10 @@ libraries; only `apps/web` builds):
   `email-link` plugin in `src/link.ts`.
 - `packages/api` — oRPC routers (`src/routers/*`), shared business logic
   (`games.ts`, `mail.ts`, `run.ts`), and the cron job in `src/jobs/rsvp-cycle.ts`.
-- `packages/email` — pure template/Brevo code (`src/index.ts`) plus
-  `src/worker.ts`, the only file there that touches the Worker env.
+- `packages/email` — pure template/Telnyx code (`src/index.ts`: emails,
+  their text siblings in `texts.ts`, the email and SMS clients, the webhook
+  signature check) plus `src/worker.ts`, the only file there that touches
+  the Worker env.
 - `packages/env` — `env` re-exported from `cloudflare:workers`; the binding types
   in `env.d.ts` must be kept in sync with `apps/web/wrangler.jsonc`.
 - `packages/ui` — shared shadcn/base-ui primitives and the design tokens.
@@ -123,7 +127,10 @@ Everything is constructed per request: `createDb()`, `createAuth()`,
 - The session is read once in `apps/web/src/routes/__root.tsx` `beforeLoad`
   (through the `getUser` server function) and flows down as router context.
   `routes/_auth/route.tsx` and `routes/_admin/route.tsx` are the guards.
-- The half-hourly Cron Trigger calls `runRsvpCycle` and `sweepExpiredSuspensions`.
+- The half-hourly Cron Trigger calls `runRsvpCycle`, then `sendReminders`
+  (`jobs/alerts.ts`) on the same `db`, and `sweepExpiredSuspensions`; the
+  per-minute one calls `drainTexts`. `server.ts` tells them apart by
+  `controller.cron`.
 
 ### Gyms, games and permits
 
@@ -171,7 +178,7 @@ file free of drizzle and `cloudflare:workers` — the web app bundles it.
   that can still tell a break from silence months later, and the "Last 10"
   column on /admin/users counts against it (`api/src/responses.ts` for the
   arithmetic, `api/src/invites.ts` for the reading and writing). The insert is
-  `on conflict do nothing`: a send Brevo rejects outright gives the stage back
+  `on conflict do nothing`: a send Telnyx rejects outright gives the stage back
   and the next pass comes through again. A game whose call never went out has
   no rows, which is right -- nobody was asked, so nobody's record moves.
 - Every link in a cycle email lands on `/rsvp/$gameId`, which **reads and does
@@ -248,7 +255,7 @@ place that decides what that means. Things that are easy to get wrong:
 - `banned` is a mirror of `status = 'deactivated'`, written in the same statement
   so Better Auth blocks the password door. It is nullable (the column has no
   NOT NULL) — never compare it with `= 0`.
-- Self-service paths (`unsuspend`, the unsubscribe form, the Brevo webhook) must
+- Self-service paths (`unsuspend`, the unsubscribe form, the Telnyx webhook) must
   never touch a deactivated row; the guards are in the `where` clauses.
 - The session cookie caches the user for five minutes. Anything that grants
   access to a spot or the gym address re-reads D1 (`findPersonState`) rather than
@@ -283,18 +290,50 @@ Better Auth's rate limiter stores its counts in D1 (`rate_limit`), keyed by
 `cf-connecting-ip`; the memory default is a per-isolate bucket and limits
 nothing on Workers.
 
-List sends go through `packages/api/src/mail.ts` → `Mailer.sendList`, which
-batches up to 99 personalised copies per Brevo request using `messageVersions`;
-templates therefore contain the `PARAM` placeholders from
+List sends go through `packages/api/src/mail.ts` → `sendToList`, which reads
+each person's choice for the kind's topic (`notify_pref`, defaults and the
+rules in `packages/api/src/notify.ts`) and splits them into `Mailer.sendList`
+and the text outbox. Templates contain the `PARAM` placeholders from
 `packages/email/src/render.ts` (`{{ params.key }}`, `{{ params.unsubscribeUrl }}`)
 rather than concrete URLs, and their output must never be run through
-`escapeHtml`. Those `params` switch on Brevo's template language over the whole
-body, so anything a person typed (a guest's name, a note) is a template
-injection until `sealTemplate` in the mailer puts a zero-width space after
-every `{` that opens a tag — everywhere except our own placeholders. It runs
-in `createMailer`'s `base()`, the last door out; keep it there rather than in
-templates, where one of them would forget. Every list send writes one
-`email_send` row. Announcement and reminder always go to the `active` audience only.
+`escapeHtml`; the mailer fills them per recipient (`fillParams`) and sends a
+copy each, up to 1,000 per Telnyx batch. Anything a person typed (a guest's
+name, a note) is sealed first: `sealTemplate` puts a zero-width space after
+every `{` that opens a tag — everywhere except our own placeholders — in
+`createMailer`'s `message()`, the last door out, before the fill; keep it
+there rather than in templates, where one of them would forget. Every list
+send writes one `email_send` row (`recipient_count` emailed, `text_count`
+texted). Cycle messages always go to the `active` audience only. Every
+email turns Telnyx's click tracking off: it would rewrite the token links.
+
+### Texts
+
+Things that are easy to get wrong:
+
+- **Texts go through the outbox, `sms_out`, never straight out** -- the free
+  plan's 50 outside calls a run is the constraint. `kickDrain` (once per
+  request, keyed on its `db`) sends 30 as the request ends; the
+  `* * * * *` cron sends 40 a run. Do not raise either without counting what
+  else the run spends. The one exception is the phone code, sent directly
+  so it is never stored.
+- A queued body keeps `{{ params.key }}`; the drain fills it from the row
+  as it sends. Never store a filled-in text.
+- The drain re-checks each person; quiet hours (`textSendAfter`, 21:00-08:00
+  ET) are applied when a list text is queued, never to a reply or a code.
+- `user.phone` only ever holds a verified number (unique index). A pending
+  one is in `phone_check`, with an HMAC of the code, not the code.
+- A reply goes through `recordAnswer` (`packages/api/src/answer.ts`), the
+  same path as the site's `rsvp.respond`; keep it the only one. It answers
+  the newest open night the person was texted about (`pickNight`), and a
+  decided night refuses, as the site does.
+- The webhook (`apps/web/src/server/telnyx-webhook.ts`) verifies Ed25519 over
+  the raw body and answers before doing a reply's work (`waitUntil`):
+  Telnyx gives it two seconds. `sms_in` makes a redelivery a no-op.
+- STOP is enforced by Telnyx whatever we do; `sms_opted_out_at` is our
+  mirror so the resolver sends email instead. A text sent anyway fails with
+  40300, which sets the mirror too.
+- Every text template must fit two GSM-7 segments (`texts.test.ts`); `toGsm`
+  runs on the way out, so copy can use curly quotes.
 
 ## Conventions
 
@@ -353,4 +392,4 @@ templates, where one of them would forget. Every list send writes one
   comments. `git log` is the design record here; match it.
 
 The README is unusually detailed and current — check it before asking about
-deployment, Brevo setup, admin bootstrapping, or who-sees-what.
+deployment, Telnyx setup, admin bootstrapping, or who-sees-what.

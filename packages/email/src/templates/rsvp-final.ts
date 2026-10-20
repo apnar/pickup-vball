@@ -1,4 +1,3 @@
-import type { Rendered } from "../brevo";
 import { emailLink } from "../links";
 import {
 	button,
@@ -11,6 +10,7 @@ import {
 	para,
 	urlLink,
 } from "../render";
+import type { Rendered } from "../telnyx";
 import { baseFacts, nameList, peopleAre, type RsvpFacts } from "./rsvp";
 
 export type RsvpFinalInput = RsvpFacts & {

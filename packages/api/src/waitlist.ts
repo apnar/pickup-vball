@@ -3,12 +3,13 @@ import {
 	type RsvpResponse,
 	rsvp,
 } from "@pickup-vball/db/schema/rsvp";
-import { waitlistInEmail } from "@pickup-vball/email";
+import { waitlistInEmail, waitlistInText } from "@pickup-vball/email";
 import { siteUrl } from "@pickup-vball/email/worker";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { Context } from "./context";
 import type { GameSummary } from "./games";
+import { tellSpotOpen } from "./jobs/alerts";
 import { sendToList } from "./mail";
 import { todayInRunTimezone } from "./run";
 
@@ -152,12 +153,20 @@ export async function promote(db: Db, game: GameSummary): Promise<number> {
 		moved += 1;
 		await tellPromoted(db, game, next);
 	}
+	// Nobody was waiting for whatever freed: the people who asked to hear
+	// about an open spot get it instead. A failure is logged, not thrown --
+	// the write it follows has already happened.
+	if (moved === 0) {
+		await tellSpotOpen(db, game).catch((error) =>
+			console.error("spot alert failed", error),
+		);
+	}
 	return moved;
 }
 
 /**
- * The email that says so. A guest has no inbox, so whoever put them on the
- * sheet hears instead. A failed send is logged, not thrown: the spot is
+ * The email (or text) that says so. A guest has no inbox, so whoever put
+ * them on the sheet hears instead. A failed send is logged, not thrown: the spot is
  * theirs either way, and the board says so.
  */
 async function tellPromoted(
@@ -167,19 +176,21 @@ async function tellPromoted(
 ) {
 	const to = row.userId ?? row.addedBy;
 	if (!to) return;
+	const facts = {
+		gameId: game.id,
+		dateLabel: game.dateLabel,
+		timeLabel: game.timeLabel,
+		location: game.location,
+		formatLabel: game.kindLabel,
+		siteUrl: siteUrl(),
+		guestName: row.userId ? null : row.name,
+	};
 	try {
 		await sendToList(db, {
 			kind: "waitlist_in",
 			gameId: game.id,
-			rendered: waitlistInEmail({
-				gameId: game.id,
-				dateLabel: game.dateLabel,
-				timeLabel: game.timeLabel,
-				location: game.location,
-				formatLabel: game.kindLabel,
-				siteUrl: siteUrl(),
-				guestName: row.userId ? null : row.name,
-			}),
+			rendered: waitlistInEmail(facts),
+			text: waitlistInText(facts),
 			onlyPersonIds: [to],
 		});
 	} catch (error) {

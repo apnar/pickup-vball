@@ -1,4 +1,3 @@
-import type { Rendered } from "../brevo";
 import { emailLink } from "../links";
 import {
 	button,
@@ -8,6 +7,7 @@ import {
 	listFooterText,
 	para,
 } from "../render";
+import type { Rendered } from "../telnyx";
 
 export type CreditsAddedInput = {
 	/** Credits added by this payment. */

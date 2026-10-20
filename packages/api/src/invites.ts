@@ -33,7 +33,7 @@ function chunk<T>(items: T[], size: number): T[][] {
 /**
  * Write down the roster the opening call found, before the call goes out.
  *
- * Idempotent, and it has to be: a send Brevo rejects outright gives the stage
+ * Idempotent, and it has to be: a send Telnyx rejects outright gives the stage
  * back, and the next pass comes through here again. One batch, chunked for
  * D1's cap of a hundred bound parameters a statement.
  */

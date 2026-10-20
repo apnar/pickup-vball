@@ -1,4 +1,5 @@
 import { memberIdsOf } from "@pickup-vball/db/groups";
+import { prefsForTopic, queueTexts } from "@pickup-vball/db/notify";
 import {
 	type Audience,
 	ensureLinkToken,
@@ -18,6 +19,7 @@ import type {
 } from "@pickup-vball/email";
 import {
 	messageEmail,
+	messageText,
 	type RsvpFacts,
 	welcomeEmail,
 } from "@pickup-vball/email";
@@ -28,13 +30,19 @@ import { type Split, splitAudience } from "./audience";
 import type { Context } from "./context";
 import { CONFIRM_AT, PLAY_AT, STAGE } from "./cycle";
 import type { GameSummary } from "./games";
+import { kickDrain } from "./jobs/sms-drain";
+import { channelsFor, choiceFor, KIND_TOPIC, textSendAfter } from "./notify";
 import { formatGameTime } from "./run";
 
 type Db = Context["db"];
 
 export type { EmailKind };
 
-export type ListSendResult = ListResult & { sendId: string };
+/**
+ * `texted` is how many were queued a text. A queued text counts as reaching
+ * them: the outbox owns it from there.
+ */
+export type ListSendResult = ListResult & { sendId: string; texted: number };
 
 export function unsubscribeUrl(token: string): string {
 	return `${siteUrl()}/api/unsubscribe/${token}`;
@@ -42,7 +50,7 @@ export function unsubscribeUrl(token: string): string {
 
 /**
  * The concrete sign-in link for one person. Unlike the links inside list
- * templates, this one is not a Brevo placeholder: it goes into an email
+ * templates, this one is not a placeholder: it goes into an email
  * addressed to exactly one subscriber.
  */
 export function welcomeLinkUrl(token: string): string {
@@ -129,6 +137,21 @@ export function renderMessage(input: {
 	return messageEmail({ ...input, siteUrl: siteUrl() });
 }
 
+/**
+ * A group update as a text: what the admin wrote for texts, or the subject
+ * when they wrote nothing. An update's body can run to pages; its subject
+ * is the line somebody wrote to be read on its own.
+ */
+export function renderMessageText(input: {
+	subject: string;
+	text?: string | undefined;
+}): string {
+	return messageText({
+		text: input.text?.trim() || input.subject,
+		siteUrl: siteUrl(),
+	});
+}
+
 /** How many people a send of this audience would reach right now. */
 export async function countRecipients(
 	db: Db,
@@ -149,13 +172,19 @@ export async function recipientCounts(
 }
 
 /**
- * Send one rendered email to the list (or a subset by id) and record the
- * outcome in `email_send`. Returns null when nobody would receive it.
+ * Send one message to the list (or a subset by id), each person by the
+ * channel they chose for this kind of message, and record the outcome in
+ * `email_send`. Returns null when nobody would receive it.
  *
  * `audience` defaults to "active", which is what game email always wants:
  * somebody on a break does not need to hear that a gym is booked. Only
  * the ad-hoc message ever passes "everyone", and nothing reaches anybody
  * deactivated -- `listRecipients` will not return them at all.
+ *
+ * `text` is the text-message version. Without one, everybody gets the
+ * email, whatever they chose: a send with nothing to text is still a send.
+ * Texts are queued, not sent: `kickDrain` sends the first few dozen as this
+ * request ends and the per-minute cron does the rest.
  */
 export async function sendToList(
 	db: Db,
@@ -163,11 +192,14 @@ export async function sendToList(
 		kind: EmailKind;
 		gameId?: string | null;
 		rendered: Rendered;
+		text?: string | null;
 		sentBy?: string | null;
 		audience?: Audience;
 		onlyPersonIds?: string[];
+		now?: Date;
 	},
 ): Promise<ListSendResult | null> {
+	const now = opts.now ?? new Date();
 	const audience = opts.audience ?? "active";
 	let people = await listRecipients(db, audience);
 	if (opts.onlyPersonIds) {
@@ -176,7 +208,21 @@ export async function sendToList(
 	}
 	if (people.length === 0) return null;
 
-	const recipients: ListRecipient[] = people.map((p) => ({
+	const topic = KIND_TOPIC[opts.kind];
+	const prefs = await prefsForTopic(db, topic);
+	const byEmail: Recipient[] = [];
+	const byText: (Recipient & { phone: string })[] = [];
+	for (const p of people) {
+		const ways = channelsFor(choiceFor(topic, prefs.get(p.id)), {
+			canEmail: !p.emailBlocked,
+			canText: !!opts.text && !!p.phone && !p.smsOptedOut,
+		});
+		if (ways.email) byEmail.push(p);
+		if (ways.text && p.phone) byText.push({ ...p, phone: p.phone });
+	}
+	if (byEmail.length === 0 && byText.length === 0) return null;
+
+	const recipients: ListRecipient[] = byEmail.map((p) => ({
 		email: p.email,
 		name: p.name,
 		unsubscribeUrl: unsubscribeUrl(p.unsubscribeToken ?? ""),
@@ -193,12 +239,29 @@ export async function sendToList(
 		subject: opts.rendered.subject,
 		audience,
 		recipientCount: result.attempted,
+		textCount: byText.length,
 		failedCount: result.attempted - result.sent,
 		messageIds: JSON.stringify(result.messageIds),
 		errors: JSON.stringify(result.failed),
 		sentBy: opts.sentBy ?? null,
 	});
-	return { ...result, sendId };
+	if (opts.text && byText.length > 0) {
+		const sendAfter = textSendAfter(now);
+		await queueTexts(
+			db,
+			byText.map((p) => ({
+				userId: p.id,
+				gameId: opts.gameId ?? null,
+				sendId,
+				kind: opts.kind,
+				toPhone: p.phone,
+				body: opts.text as string,
+				sendAfter,
+			})),
+		);
+		kickDrain(db);
+	}
+	return { ...result, texted: byText.length, sendId };
 }
 
 /**

@@ -1,4 +1,3 @@
-import type { Rendered } from "../brevo";
 import { emailLink } from "../links";
 import {
 	button,
@@ -7,6 +6,7 @@ import {
 	listFooterText,
 	paragraphs,
 } from "../render";
+import type { Rendered } from "../telnyx";
 
 export type MessageInput = {
 	subject: string;
